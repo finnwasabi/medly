@@ -1,0 +1,17 @@
+# Plan nội bộ, không public
+plans/
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+build/
+*.ipa
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+.DS_Store
+.env
