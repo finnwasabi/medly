@@ -1,0 +1,53 @@
+import Foundation
+import Testing
+@testable import NersCore
+
+/// Đổi múi giờ mặc định của tiến trình (giống người dùng đổi múi giờ máy) rồi so kết quả.
+/// Chạy tuần tự vì đổi trạng thái toàn cục.
+@Suite(.serialized) struct TimeZoneTests {
+    private func scenario() throws -> (events: [ReminderEvent], json: Data, next: Date, missed: Int) {
+        var planner = Planner(settings: ReminderSettings(mainHour: 23, mainMinute: 30, pills: PillCounter(count: 30, at: vn(2026, 10, 1, 9))))
+        planner.markTaken(at: vn(2026, 10, 24, 23, 40))
+        planner.markTaken(at: vn(2026, 10, 25, 23, 31))
+        planner.markTaken(at: vn(2026, 10, 27, 20))
+        let now = vn(2026, 10, 27, 20, 5)
+        return (planner.events(now: now), try planner.snapshot(now: now).jsonData(), planner.nextReminder(now: now), planner.missedCount(now: now))
+    }
+
+    private func setDeviceTimeZone(_ zone: TimeZone) {
+        setenv("TZ", zone.identifier, 1)
+        NSTimeZone.resetSystemTimeZone()
+        NSTimeZone.default = zone
+    }
+
+    @Test func resultsIdenticalAcrossDeviceTimeZones() throws {
+        let original = TimeZone.current
+        defer { setDeviceTimeZone(original) }
+
+        setDeviceTimeZone(VietnamClock.timeZone)
+        let reference = try scenario()
+        #expect(reference.next == vn(2026, 10, 28, 20))
+        #expect(reference.missed == 1)
+
+        for id in ["Asia/Tokyo", "Europe/Paris", "America/Los_Angeles"] {
+            let zone = TimeZone(identifier: id)!
+            setDeviceTimeZone(zone)
+            #expect(TimeZone.current.identifier == id)
+            let result = try scenario()
+            #expect(result.events == reference.events)
+            #expect(result.json == reference.json)
+            #expect(result.next == reference.next)
+            #expect(result.missed == reference.missed)
+        }
+    }
+
+    @Test func formatting() {
+        let date = utc("2026-10-27T14:00:00Z")
+        #expect(TimeFormatting.vietnamTime(date) == "21:00 giờ VN")
+        #expect(TimeFormatting.clockTime(date, in: TimeZone(identifier: "Asia/Tokyo")!) == "23:00")
+        #expect(TimeFormatting.clockTime(date, in: TimeZone(identifier: "Europe/Paris")!) == "15:00")
+        #expect(TimeFormatting.clockTime(date, in: TimeZone(identifier: "America/Los_Angeles")!) == "07:00")
+        #expect(TimeFormatting.dualTime(date, deviceTimeZone: TimeZone(identifier: "Asia/Tokyo")!) == "21:00 giờ VN, 23:00 giờ máy")
+        #expect(TimeFormatting.vietnamTime(utc("2026-10-27T17:15:00Z")) == "00:15 giờ VN")
+    }
+}

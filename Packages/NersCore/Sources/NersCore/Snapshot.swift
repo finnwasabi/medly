@@ -1,0 +1,131 @@
+import Foundation
+
+/// Ảnh chụp trạng thái gửi lên `POST /v1/snapshot`. Khớp hợp đồng dữ liệu trong docs/spec.md:
+/// mốc giờ là chuỗi UTC ISO 8601 không phần lẻ giây, trường không có giá trị ghi `null`.
+public struct Snapshot: Codable, Equatable, Sendable {
+    public static let currentSchemaVersion = 1
+
+    public var schemaVersion: Int
+    public var updatedAt: Date
+    public var lastTakenAt: Date?
+    public var nextDueAt: Date
+    public var deadlineAt: Date
+    public var daysTaken: Int
+    public var missedCount: Int
+    public var pillsTotal: Int?
+    public var pillsRemaining: Int?
+    public var refillReminder: RefillReminder
+    public var pausedUntil: Date?
+
+    public init(
+        schemaVersion: Int = Snapshot.currentSchemaVersion,
+        updatedAt: Date,
+        lastTakenAt: Date?,
+        nextDueAt: Date,
+        deadlineAt: Date,
+        daysTaken: Int,
+        missedCount: Int,
+        pillsTotal: Int?,
+        pillsRemaining: Int?,
+        refillReminder: RefillReminder,
+        pausedUntil: Date?
+    ) {
+        self.schemaVersion = schemaVersion
+        self.updatedAt = UTCTimestamp.floorToSecond(updatedAt)
+        self.lastTakenAt = lastTakenAt.map(UTCTimestamp.floorToSecond)
+        self.nextDueAt = UTCTimestamp.floorToSecond(nextDueAt)
+        self.deadlineAt = UTCTimestamp.floorToSecond(deadlineAt)
+        self.daysTaken = daysTaken
+        self.missedCount = missedCount
+        self.pillsTotal = pillsTotal
+        self.pillsRemaining = pillsRemaining
+        self.refillReminder = refillReminder
+        self.pausedUntil = pausedUntil.map(UTCTimestamp.floorToSecond)
+    }
+
+    /// Dựng snapshot từ cài đặt, lịch sử và thời điểm hiện tại.
+    public init(settings: ReminderSettings, history: [DoseRecord], now: Date) {
+        let planner = Planner(settings: settings, history: history)
+        let dose = planner.currentDose(now: now)
+        self.init(
+            updatedAt: now,
+            lastTakenAt: planner.lastTaken(now: now)?.takenAt,
+            nextDueAt: dose.dueAt,
+            deadlineAt: dose.deadlineAt,
+            daysTaken: planner.daysTaken(now: now),
+            missedCount: planner.missedCount(now: now),
+            pillsTotal: settings.pills?.total,
+            pillsRemaining: settings.pills?.remaining,
+            refillReminder: settings.refillReminder,
+            pausedUntil: settings.pausedUntil(now: now)
+        )
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion, updatedAt, lastTakenAt, nextDueAt, deadlineAt, daysTaken, missedCount
+        case pillsTotal, pillsRemaining, refillReminder, pausedUntil
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(schemaVersion, forKey: .schemaVersion)
+        try c.encode(UTCTimestamp.string(from: updatedAt), forKey: .updatedAt)
+        // Dùng encode cho Optional để ghi `null` thay vì bỏ trường.
+        try c.encode(lastTakenAt.map(UTCTimestamp.string(from:)), forKey: .lastTakenAt)
+        try c.encode(UTCTimestamp.string(from: nextDueAt), forKey: .nextDueAt)
+        try c.encode(UTCTimestamp.string(from: deadlineAt), forKey: .deadlineAt)
+        try c.encode(daysTaken, forKey: .daysTaken)
+        try c.encode(missedCount, forKey: .missedCount)
+        try c.encode(pillsTotal, forKey: .pillsTotal)
+        try c.encode(pillsRemaining, forKey: .pillsRemaining)
+        try c.encode(refillReminder, forKey: .refillReminder)
+        try c.encode(pausedUntil.map(UTCTimestamp.string(from:)), forKey: .pausedUntil)
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func date(_ key: CodingKeys) throws -> Date? {
+            guard let text = try c.decodeIfPresent(String.self, forKey: key) else { return nil }
+            guard let value = UTCTimestamp.date(from: text) else {
+                throw DecodingError.dataCorruptedError(forKey: key, in: c, debugDescription: "Không đọc được mốc giờ \(text)")
+            }
+            return value
+        }
+        func required(_ key: CodingKeys) throws -> Date {
+            guard let value = try date(key) else {
+                throw DecodingError.valueNotFound(Date.self, .init(codingPath: c.codingPath + [key], debugDescription: "Thiếu mốc giờ"))
+            }
+            return value
+        }
+        self.init(
+            schemaVersion: try c.decode(Int.self, forKey: .schemaVersion),
+            updatedAt: try required(.updatedAt),
+            lastTakenAt: try date(.lastTakenAt),
+            nextDueAt: try required(.nextDueAt),
+            deadlineAt: try required(.deadlineAt),
+            daysTaken: try c.decode(Int.self, forKey: .daysTaken),
+            missedCount: try c.decode(Int.self, forKey: .missedCount),
+            pillsTotal: try c.decodeIfPresent(Int.self, forKey: .pillsTotal),
+            pillsRemaining: try c.decodeIfPresent(Int.self, forKey: .pillsRemaining),
+            refillReminder: try c.decode(RefillReminder.self, forKey: .refillReminder),
+            pausedUntil: try date(.pausedUntil)
+        )
+    }
+
+    /// JSON gửi lên server, khoá sắp xếp để kết quả ổn định.
+    public func jsonData() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(self)
+    }
+
+    public static func decode(from data: Data) throws -> Snapshot {
+        try JSONDecoder().decode(Snapshot.self, from: data)
+    }
+}
+
+extension Planner {
+    public func snapshot(now: Date) -> Snapshot {
+        Snapshot(settings: settings, history: history, now: now)
+    }
+}
