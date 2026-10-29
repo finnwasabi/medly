@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-10-29
+## [0.2.1] - 2026-10-29
 
 ### Added
 - Appearance in Settings: follow the phone, light or dark.
