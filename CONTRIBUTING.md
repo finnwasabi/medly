@@ -1,7 +1,7 @@
 # Contributing
 
-Thanks for helping. Issues and pull requests are welcome in English or Vietnamese
-(*đóng góp bằng tiếng Việt hay tiếng Anh đều được*).
+Thanks for helping. Issues and pull requests are welcome in English or Vietnamese.
+Code, comments, commits, the changelog and release notes are written in English.
 
 ## Branches
 

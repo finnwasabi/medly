@@ -1,12 +1,12 @@
 import Foundation
 
-/// Ảnh chụp trạng thái gửi lên `POST /v1/snapshot`. Khớp hợp đồng dữ liệu trong docs/spec.md:
-/// mốc giờ là chuỗi UTC ISO 8601 không phần lẻ giây, trường không có giá trị ghi `null`.
+/// The status snapshot sent to `POST /v1/snapshot`. Matches the data contract in docs/spec.md:
+/// times are UTC ISO 8601 strings without fractional seconds, and empty fields are written as `null`.
 public struct Snapshot: Codable, Equatable, Sendable {
     public static let currentSchemaVersion = 1
 
     public var schemaVersion: Int
-    /// Tên người dùng nhập trong app, để bot gọi đúng tên. `nil` khi chưa nhập.
+    /// The user's name from the app, so the bot can address them. `nil` until entered.
     public var name: String?
     public var updatedAt: Date
     public var lastTakenAt: Date?
@@ -15,7 +15,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
     public var daysTaken: Int
     public var missedCount: Int
     public var lateCount: Int
-    /// Số lần hụt đã uống bù, nằm trong `missedCount`.
+    /// Misses that were made up, included in `missedCount`.
     public var madeUpCount: Int
     public var pillsTotal: Int?
     public var pillsRemaining: Int?
@@ -52,7 +52,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         self.pausedUntil = pausedUntil.map(UTCTimestamp.floorToSecond)
     }
 
-    /// Dựng snapshot từ cài đặt, lịch sử và thời điểm hiện tại.
+    /// Builds a snapshot from settings, history and the current time.
     public init(settings: ReminderSettings, history: [DoseRecord], now: Date) {
         let planner = Planner(settings: settings, history: history)
         let dose = planner.currentDose(now: now)
@@ -82,7 +82,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         try c.encode(schemaVersion, forKey: .schemaVersion)
         try c.encode(name, forKey: .name)
         try c.encode(UTCTimestamp.string(from: updatedAt), forKey: .updatedAt)
-        // Dùng encode cho Optional để ghi `null` thay vì bỏ trường.
+        // Encode optionals explicitly to write `null` instead of dropping the key.
         try c.encode(lastTakenAt.map(UTCTimestamp.string(from:)), forKey: .lastTakenAt)
         try c.encode(UTCTimestamp.string(from: nextDueAt), forKey: .nextDueAt)
         try c.encode(UTCTimestamp.string(from: deadlineAt), forKey: .deadlineAt)
@@ -129,7 +129,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         name = try c.decodeIfPresent(String.self, forKey: .name)
     }
 
-    /// JSON gửi lên server, khoá sắp xếp để kết quả ổn định.
+    /// JSON for the server, with sorted keys for stable output.
     public func jsonData() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]

@@ -3,7 +3,7 @@ import Testing
 @testable import NersCore
 
 @Suite struct AlertPlannerTests {
-    /// Uống 23:00 nên lần kế có giờ chính 21:00 và hạn chót 23:00, đủ chỗ cho chuỗi nhắc trước hạn.
+    /// Taken at 23:00, so the next dose has main time 21:00 and deadline 23:00, leaving room for the pre-deadline chain.
     let events: [ReminderEvent] = {
         var planner = Planner()
         planner.markTaken(at: vn(2026, 10, 1, 23))

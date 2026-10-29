@@ -20,19 +20,19 @@ struct NersDailyApp: App {
     var body: some Scene {
         WindowGroup {
             launchScreen
-                // Đổi ngôn ngữ thì dựng lại cả cây để mọi chữ L(...) đọc lại.
+                // Changing the language rebuilds the whole tree so every L(...) is evaluated again.
                 .id(model.language)
                 .environment(model)
                 .environment(\.locale, AppLanguage.locale)
                 .fontDesign(.rounded)
         }
         .onChange(of: scenePhase) { _, phase in
-            // Mở app là nạp lại lịch nhắc cho đủ H ngày tới.
+            // Opening the app refills the reminders for the next H days.
             if phase == .active { Task { await model.resync() } }
         }
     }
 
-    // Tham số `-screen` chỉ dùng để chụp ảnh màn hình (language, profile, onboarding, history, settings).
+    // The `-screen` launch argument only exists for screenshots (language, profile, onboarding, history, settings).
     @ViewBuilder
     private var launchScreen: some View {
         switch UserDefaults.standard.string(forKey: "screen") {

@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApp, createBot, createStore, changeText, statusText, validateSnapshot, vnTime } from '../server.js';
+import { createApp, createBot, createStore, changeText, setLanguage, statusText, validateSnapshot, vnTime } from '../server.js';
 
-// Mẫu đúng như docs/spec.md.
+// The sample from docs/spec.md.
 const spec = {
   schemaVersion: 1,
   name: 'Ner',
@@ -71,7 +71,7 @@ test('POST keeps only the newest snapshot and reports stale ones', async () => {
     assert.equal((await res.json()).stale, true);
     assert.equal((await (await request('GET')).json()).daysTaken, 12);
 
-    // Mở app lại mà không có gì mới: lưu nhưng không nhắn.
+    // Reopening the app with nothing new: stored but no message.
     await request('POST', { ...spec, updatedAt: '2026-10-27T15:00:00Z' });
     assert.equal(sent.length, 1);
   });
@@ -106,6 +106,7 @@ test('make-up dose is reported and counted apart from missed ones', () => {
 test('messages use the name from the app, or a neutral word without one', () => {
   assert.match(changeText(null, { ...spec, name: null }), /^✅ Người ấy đã uống/);
   assert.match(statusText({ ...spec, name: 'Mai' }), /^💊 Mai/);
+  assert.match(statusText({ ...spec, name: null }), /^💊 Ner's Daily/);
   assert.match(validateSnapshot({ ...spec, name: 'x'.repeat(61) }), /name/);
 });
 
@@ -141,10 +142,21 @@ test('bot answers only its chat and sends the 09:00 report once a day', async ()
   assert.equal(calls.at(-1).body.chat_id, '42');
 
   const before = calls.length;
-  await bot.dailyReport(Date.parse('2026-10-28T01:30:00Z')); // 08:30 giờ VN: chưa tới giờ
+  await bot.dailyReport(Date.parse('2026-10-28T01:30:00Z')); // 08:30 Vietnam time: not yet
   assert.equal(calls.length, before);
-  await bot.dailyReport(Date.parse('2026-10-28T02:00:00Z')); // 09:00 giờ VN
+  await bot.dailyReport(Date.parse('2026-10-28T02:00:00Z')); // 09:00 Vietnam time
   await bot.dailyReport(Date.parse('2026-10-28T02:01:00Z'));
   assert.equal(calls.length, before + 1);
   assert.match(calls.at(-1).body.text, /Bản tin sáng/);
+});
+
+test('English bot texts with BOT_LANGUAGE=en', () => {
+  setLanguage('en');
+  try {
+    assert.match(changeText(null, spec), /^✅ Ner took the pill at 21:03 VN time, 16 pills left\./);
+    assert.match(statusText(spec, Date.parse('2026-10-28T01:00:00Z')), /Taken 12 days, late 0, missed 1\./);
+    assert.match(statusText(spec, Date.parse('2026-10-28T01:00:00Z')), /Tuesday 27\/10/);
+  } finally {
+    setLanguage('vi');
+  }
 });

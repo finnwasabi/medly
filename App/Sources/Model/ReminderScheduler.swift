@@ -4,20 +4,20 @@ import NersCore
 import SwiftUI
 import UserNotifications
 
-/// Đổ danh sách lần báo vào AlarmKit (báo thức có tiếng) và UserNotifications (noti thường).
-/// Mốc luôn là thời điểm tuyệt đối: `.fixed` cho báo thức, khoảng giây tính từ bây giờ cho noti,
-/// nên đổi múi giờ máy không làm lệch.
+/// Feeds planned alerts into AlarmKit (ringing alarms) and UserNotifications (plain notifications).
+/// Times are always absolute: `.fixed` for alarms and seconds from now for notifications,
+/// so changing the phone's time zone never shifts them.
 nonisolated struct ReminderScheduler: Sendable {
     static let doseCategory = "dose"
     static let takenAction = "taken"
 
-    /// Trả số lần báo không hẹn được.
+    /// Returns how many alerts could not be scheduled.
     func apply(_ alerts: [PlannedAlert], cancelActive: Bool, snooze: TimeInterval) async -> Int {
         var failures = 0
-        // Chữ trên nút noti theo ngôn ngữ đang chọn.
+        // Notification button titles follow the selected language.
         Self.registerCategory()
         let manager = AlarmManager.shared
-        // ponytail: huỷ hết rồi hẹn lại mỗi lần, khoảng vài trăm báo thức; đo trên máy thật, chậm thì chuyển sang so khác biệt.
+        // ponytail: cancel and reschedule everything each time (a few hundred alarms); measure on a device and switch to diffing if slow.
         for alarm in (try? manager.alarms) ?? [] where cancelActive || alarm.state == .scheduled {
             try? manager.cancel(id: alarm.id)
         }
@@ -69,7 +69,7 @@ nonisolated struct ReminderScheduler: Sendable {
         )
     }
 
-    /// Nút "Đã uống" ngay trên noti, không cần mở app.
+    /// A "Taken" button right on the notification, without opening the app.
     static func registerCategory() {
         let taken = UNNotificationAction(identifier: takenAction, title: L("Đã uống", "Taken"), options: [])
         UNUserNotificationCenter.current().setNotificationCategories([
@@ -78,7 +78,7 @@ nonisolated struct ReminderScheduler: Sendable {
     }
 }
 
-/// Nút "Đã uống" trên báo thức. Chạy nền, không mở app.
+/// The alarm's "Taken" button. Runs in the background without opening the app.
 struct MarkTakenIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Đã uống thuốc"
     static let isDiscoverable = false

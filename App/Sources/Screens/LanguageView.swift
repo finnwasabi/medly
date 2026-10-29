@@ -1,7 +1,7 @@
 import NersCore
 import SwiftUI
 
-/// Màn đầu tiên ở lần mở app đầu: chọn ngôn ngữ, viết cả hai thứ tiếng vì chưa biết người dùng đọc tiếng nào.
+/// The very first screen: pick a language. Written in both languages since we do not know which one the user reads yet.
 struct LanguageView: View {
     var onChoose: (Language) -> Void
 

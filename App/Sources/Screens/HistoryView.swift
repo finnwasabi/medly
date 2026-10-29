@@ -3,7 +3,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @Environment(AppModel.self) private var model
-    /// 0 là tháng này, -1 là tháng trước.
+    /// 0 is this month, -1 the previous one.
     @State private var monthOffset = 0
     @State private var editing: DoseRecord?
 
@@ -61,7 +61,7 @@ struct HistoryView: View {
         let month = calendar.date(byAdding: .month, value: monthOffset, to: calendar.date(from: calendar.dateComponents([.year, .month], from: now))!)!
         let parts = calendar.dateComponents([.year, .month], from: month)
         let dayCount = calendar.range(of: .day, in: .month, for: month)!.count
-        // Thứ Hai đầu tuần: weekday 2 thành 0 ô trống, Chủ Nhật (1) thành 6.
+        // Weeks start on Monday: weekday 2 gives 0 blank cells, Sunday (1) gives 6.
         let leading = (calendar.component(.weekday, from: month) + 5) % 7
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -78,7 +78,7 @@ struct HistoryView: View {
             }
             .foregroundStyle(Palette.primary)
             LazyVGrid(columns: columns, spacing: 6) {
-                // Ba loại ô chung một lưới nên id phải khác dải: tiêu đề thứ -1 tới -7, ô trống từ -100, ngày từ 1.
+                // Three kinds of cells share one grid, so ids use separate ranges: weekday headers -1 to -7, blanks from -100, days from 1.
                 ForEach([-2, -3, -4, -5, -6, -7, -1], id: \.self) { weekday in
                     Text(TodayText.shortWeekday(-weekday))
                         .font(.caption.weight(.semibold))
@@ -111,7 +111,7 @@ struct HistoryView: View {
     }
 
     private var legend: some View {
-        // Hai hàng để vừa màn hẹp.
+        // Wraps to two rows on narrow screens.
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), alignment: .leading)], alignment: .leading, spacing: 6) {
             ForEach([DoseStatus.taken, .late, .madeUp, .missed, .paused], id: \.self) { status in
                 Label(status.label, systemImage: status.icon)
@@ -140,7 +140,7 @@ struct HistoryView: View {
                     .padding(.vertical, 10)
             }
             ForEach(records) { record in
-                // Lần hụt hay tạm dừng không sửa được: không bọc nút, để chữ không bị làm mờ như nút tắt.
+                // Missed or paused rows are not editable: no button wrapper, so the text is not dimmed like a disabled button.
                 let row = HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                             Text(TodayText.dayTitle(record.status == .madeUp ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)))
@@ -173,7 +173,7 @@ struct HistoryView: View {
     }
 }
 
-/// Sửa giờ uống của một lần, nhập theo giờ VN.
+/// Edits the taken time of a dose, entered in Vietnam time.
 struct EditTakenTimeSheet: View {
     let record: DoseRecord
     @Environment(AppModel.self) private var model

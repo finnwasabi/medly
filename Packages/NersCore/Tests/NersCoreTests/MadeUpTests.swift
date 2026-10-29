@@ -2,9 +2,9 @@ import Foundation
 import Testing
 @testable import NersCore
 
-/// Uống bù: hôm qua hụt, hôm nay uống thêm một viên cho hôm qua.
+/// Make-ups: missed yesterday, take an extra pill today for yesterday.
 @Suite struct MadeUpTests {
-    /// Uống 26/10 21:00, bỏ 27/10, nên lần 27/10 thành hụt lúc 28/10 09:00 (hết cửa sổ trễ 12 giờ).
+    /// Taken 26/10 21:00, skipped 27/10, so 27/10 becomes missed at 28/10 09:00 (end of the 12 h late window).
     private func plannerWithOneMiss() -> (Planner, missed: DoseRecord) {
         var planner = Planner()
         planner.addPills(28, now: vn(2026, 10, 1, 8))
@@ -17,7 +17,7 @@ import Testing
         let (planner, missed) = plannerWithOneMiss()
         #expect(VietnamClock.calendar.isDate(missed.scheduledAt, inSameDayAs: vn(2026, 10, 27, 12)))
         #expect(planner.outstandingMissed(now: vn(2026, 10, 28, 10)).count == 1)
-        // Còn trong cửa sổ trễ thì chưa phải hụt, chưa có gì để bù.
+        // Within the late window it is not missed yet, so there is nothing to make up.
         #expect(planner.outstandingMissed(now: vn(2026, 10, 28, 8)).isEmpty)
     }
 
@@ -30,9 +30,9 @@ import Testing
         #expect(made != nil)
         let later = now.addingTimeInterval(60)
 
-        // Hai viên trong ngày: một cho hôm nay, một bù hôm qua.
+        // Two pills in one day: one for today, one making up yesterday.
         #expect(planner.settings.pills?.remaining == 25)
-        // Uống bù không làm đổi lịch nhắc.
+        // A make-up does not change the schedule.
         #expect(planner.currentDose(now: later) == before)
         #expect(planner.missedCount(now: later) == 1)
         #expect(planner.madeUpCount(now: later) == 1)
@@ -70,7 +70,7 @@ import Testing
         let first = planner.markTaken(at: vn(2026, 10, 26, 21))
         let missed = planner.outstandingMissed(now: vn(2026, 10, 28, 10)).first!
         planner.markMadeUp(missedAt: missed.scheduledAt, at: vn(2026, 10, 28, 10))
-        // Sửa giờ lần uống trước sang 27/10 21:00: không còn lần hụt nào để khớp.
+        // Moving the earlier take to 27/10 21:00 leaves no miss to match.
         planner.editTakenTime(id: first.id, to: vn(2026, 10, 27, 21))
         let now = vn(2026, 10, 28, 11)
         #expect(planner.madeUpCount(now: now) == 0)
@@ -81,7 +81,7 @@ import Testing
         var planner = Planner()
         planner.markTaken(at: vn(2026, 10, 10, 21))
         let now = vn(2026, 10, 20, 12)
-        // Bỏ từ 11/10 tới 19/10: 9 lần hụt, chỉ 7 ngày gần nhất còn nhắc bù.
+        // Skipped 11/10 to 19/10: 9 misses, only the last 7 days are offered for make-up.
         #expect(planner.missedCount(now: now) == 9)
         let outstanding = planner.outstandingMissed(now: now)
         #expect(!outstanding.isEmpty && outstanding.count <= 7)

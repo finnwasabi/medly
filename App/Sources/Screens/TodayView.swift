@@ -7,8 +7,8 @@ struct TodayView: View {
 
     var body: some View {
         NavigationStack {
-            // Vẽ lại mỗi phút cho đếm ngược. Dùng giờ thật chứ không dùng `context.date` (mốc đầu phút),
-            // không thì lần vừa bấm "Đã uống" nằm sau `now` và bị bỏ qua.
+            // Redraws every minute for the countdowns. Uses the real time, not `context.date` (the start of the minute),
+            // otherwise a dose taken a moment ago lies after `now` and is ignored.
             TimelineView(.everyMinute) { _ in
                 let now = Date.now
                 ScrollView {
@@ -116,7 +116,7 @@ struct TodayView: View {
         .card()
     }
 
-    /// Các lần hụt trong 7 ngày gần nhất chưa uống bù. App không khuyên bù hay không, chỉ trỏ về tờ hướng dẫn.
+    /// Missed doses from the last 7 days that are not made up. The app gives no advice on making up, it only points to the leaflet.
     private func missedCard(_ records: [DoseRecord]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             StatusPill(status: .missed)
@@ -248,7 +248,7 @@ struct TodayView: View {
     }
 }
 
-/// Chữ hiển thị trên màn Hôm nay. Ngày và giờ chính luôn theo giờ VN.
+/// Display texts. Days and main times always follow Vietnam time.
 enum TodayText {
     private static let weekdaysVI = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"]
     private static let weekdaysEN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -257,12 +257,12 @@ enum TodayText {
     static let shortWeekdaysVI = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]
     static let shortWeekdaysEN = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
 
-    /// Tên thứ viết tắt theo `weekday` của Calendar (1 là Chủ Nhật).
+    /// Short weekday name for a Calendar `weekday` (1 is Sunday).
     static func shortWeekday(_ weekday: Int) -> String {
         (AppLanguage.current == .en ? shortWeekdaysEN : shortWeekdaysVI)[weekday - 1]
     }
 
-    /// "Thứ Năm, 29 tháng 10" hoặc "Thursday, 29 October", theo ngày VN.
+    /// "Thứ Năm, 29 tháng 10" or "Thursday, 29 October", by the Vietnam date.
     static func dayTitle(_ date: Date) -> String {
         let parts = VietnamClock.calendar.dateComponents([.weekday, .day, .month], from: date)
         let weekday = (parts.weekday ?? 1) - 1, day = parts.day ?? 1, month = parts.month ?? 1
@@ -273,7 +273,7 @@ enum TodayText {
         L("Tháng \(month), \(String(year))", "\(monthsEN[month - 1]) \(String(year))")
     }
 
-    /// "hôm nay", "mai", hoặc thứ trong tuần, theo ngày VN.
+    /// "today", "tomorrow" or a weekday, by the Vietnam date.
     static func relativeDay(_ date: Date, from now: Date) -> String {
         let calendar = VietnamClock.calendar
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 0
@@ -284,7 +284,7 @@ enum TodayText {
         }
     }
 
-    /// "2 giờ 10 phút" hoặc "2 h 10 min". Làm tròn lên phút để đếm ngược không hiện "0 phút".
+    /// "2 giờ 10 phút" or "2 h 10 min". Rounds up so a countdown never shows "0 min".
     static func duration(_ seconds: TimeInterval) -> String {
         let minutes = Int((max(0, seconds) / 60).rounded(.up))
         let h = minutes / 60, m = minutes % 60
@@ -292,7 +292,7 @@ enum TodayText {
         return m == 0 ? L("\(h) giờ", "\(h) h") : L("\(h) giờ \(m) phút", "\(h) h \(m) min")
     }
 
-    /// Giờ nơi máy đang ở, ẩn khi máy đang theo giờ VN.
+    /// The local time where the phone is, hidden when the phone is on Vietnam time.
     static func localLine(_ date: Date) -> String? {
         let zone = TimeZone.autoupdatingCurrent
         guard zone.secondsFromGMT(for: date) != VietnamClock.timeZone.secondsFromGMT(for: date) else { return nil }
@@ -301,7 +301,7 @@ enum TodayText {
         return L("tức \(time) tại \(place)", "that is \(time) in \(place)")
     }
 
-    /// Còn hiện trạng thái "Đã uống": cùng ngày VN, hoặc còn trong thời gian hoàn tác.
+    /// Keep showing "Taken": same Vietnam day, or still within the undo window.
     static func isRecent(_ takenAt: Date, now: Date, undoWindow: TimeInterval) -> Bool {
         VietnamClock.calendar.isDate(takenAt, inSameDayAs: now) || now.timeIntervalSince(takenAt) <= undoWindow
     }

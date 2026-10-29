@@ -2,7 +2,7 @@ import AlarmKit
 import SwiftUI
 import UserNotifications
 
-// Màn đầu tiên khi mở app: giải thích vì sao cần quyền báo thức rồi xin quyền.
+// Explains why alarm permission is needed, then asks for it.
 struct OnboardingView: View {
     var onFinish: () -> Void
 
@@ -37,7 +37,7 @@ struct OnboardingView: View {
             Button(L("Cho phép báo thức", "Allow alarms")) {
                 asking = true
                 Task {
-                    // Từ chối vẫn cho vào app; màn Hôm nay sẽ báo lỗi hẹn nhắc.
+                    // Declining still lets the user in; Today then shows the scheduling warning.
                     _ = try? await AlarmManager.shared.requestAuthorization()
                     _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
                     await model.resync()

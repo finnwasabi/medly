@@ -1,48 +1,48 @@
 import Foundation
 
-/// Một lần uống đang chờ hoặc sẽ tới.
+/// A dose that is pending or upcoming.
 public struct Dose: Equatable, Sendable {
-    /// Giờ chính (giờ VN) mà lần này thuộc về.
+    /// The main time (Vietnam time) this dose belongs to.
     public var slotAt: Date
-    /// Mốc nhắc chính.
+    /// The main reminder time.
     public var dueAt: Date
-    /// Hạn chót, tại đây báo thức có tiếng.
+    /// The deadline, where a ringing alarm fires.
     public var deadlineAt: Date
-    /// Uống sau hạn chót mà trước mốc này thì tính trễ, quá mốc này mới tính hụt.
+    /// Taken after the deadline but before this counts as late; after this it counts as missed.
     public var lateUntil: Date
-    /// Đúng khi lần này đã bị "về lại giờ gốc" và vượt khoảng tối đa.
+    /// True when this dose was moved "back to the main time" and exceeds the maximum gap.
     public var exceedsMaxInterval: Bool
-    /// Mốc tính hạn chót: lần uống trước, hoặc mốc ảo sau một lần hụt hay tạm dừng.
+    /// The anchor for the deadline: the previous dose, or a virtual one after a miss or a pause.
     var anchor: Date
 }
 
 public enum ReminderKind: String, Codable, Sendable {
     case main, `repeat`, hourly, final, deadline
-    /// Sau hạn chót, nhắc tiếp có tiếng tới khi uống hoặc hết cửa sổ trễ.
+    /// After the deadline: keeps ringing until taken or until the late window ends.
     case overdue
 }
 
 public struct ReminderEvent: Equatable, Sendable {
     public var date: Date
     public var kind: ReminderKind
-    /// Báo thức có tiếng bất kể chế độ máy. Đúng từ hạn chót trở đi.
+    /// A ringing alarm regardless of the phone's mode. True from the deadline on.
     public var requiresSound: Bool
     public var dueAt: Date
     public var deadlineAt: Date
 }
 
-/// Kết quả xem trước thao tác "về lại giờ gốc".
+/// Preview of "back to the main time".
 public struct ResetPreview: Equatable, Sendable {
     public var dueAt: Date
     public var deadlineAt: Date
-    /// Đúng khi lần đó cách lần uống trước quá khoảng tối đa, app phải cảnh báo.
+    /// True when that dose would be further than the maximum gap from the previous one; the app must warn.
     public var exceedsMaxInterval: Bool
 }
 
-/// Tính lịch nhắc từ cài đặt và lịch sử uống. Không đọc giờ máy, `now` luôn là tham số.
+/// Computes the schedule from settings and history. Never reads the clock; `now` is always a parameter.
 public struct Planner: Sendable {
     public var settings: ReminderSettings
-    /// Lịch sử các lần đã uống (`status == .taken`).
+    /// Dose history: taken doses (`.taken`) and make-ups (`.madeUp`).
     public var history: [DoseRecord]
 
     public init(settings: ReminderSettings = ReminderSettings(), history: [DoseRecord] = []) {
@@ -50,20 +50,20 @@ public struct Planner: Sendable {
         self.history = history
     }
 
-    // MARK: Truy vấn
+    // MARK: Queries
 
-    /// Lần uống đang chờ tại `now`.
+    /// The dose pending at `now`.
     public func currentDose(now: Date) -> Dose { walk(now: now).dose }
 
-    /// Mốc nhắc kế tiếp.
+    /// The next reminder time.
     public func nextReminder(now: Date) -> Date { currentDose(now: now).dueAt }
 
     public func missedCount(now: Date) -> Int { walk(now: now).missed }
 
-    /// Số lần uống sau hạn chót nhưng còn trong cửa sổ trễ.
+    /// Doses taken after the deadline but within the late window.
     public func lateCount(now: Date) -> Int { walk(now: now).late }
 
-    /// Số lần đã uống kể từ lần nhập hoặc thêm viên gần nhất, không đếm viên thì kể từ đầu.
+    /// Doses taken since pills were last entered or added, or since the start when not counting.
     public func daysTaken(now: Date) -> Int {
         let since = settings.pills?.countingSince ?? .distantPast
         return takes(upTo: now).filter { $0.takenAt! >= since }.count
@@ -71,20 +71,20 @@ public struct Planner: Sendable {
 
     public func lastTaken(now: Date) -> DoseRecord? { takes(upTo: now).last }
 
-    /// Lịch sử đầy đủ để hiển thị: lần uống (đúng hạn hoặc trễ), lần hụt, lần uống bù, lần rơi vào tạm dừng.
+    /// Full history for display: doses (on time or late), misses, make-ups and paused slots.
     public func timeline(now: Date) -> [DoseRecord] { resolved(now: now).records }
 
-    /// Số lần hụt đã được uống bù. `missedCount` vẫn đếm cả các lần này.
+    /// Misses that were made up. `missedCount` still includes them.
     public func madeUpCount(now: Date) -> Int { resolved(now: now).matched }
 
-    /// Các lần hụt chưa uống bù trong `days` ngày gần nhất, mới nhất trước.
+    /// Misses not made up within the last `days` days, newest first.
     public func outstandingMissed(now: Date, days: Int = 7) -> [DoseRecord] {
         let since = now.addingTimeInterval(-TimeInterval(days) * VietnamClock.day)
         return timeline(now: now).filter { $0.status == .missed && $0.scheduledAt >= since }.reversed()
     }
 
-    /// Ghép lần uống bù vào đúng lần hụt nó bù. Lần bù không còn khớp lần hụt nào (ví dụ sau khi sửa giờ uống
-    /// làm lần hụt biến mất) vẫn hiện trong lịch sử để còn xoá được, nhưng không tính là đã bù.
+    /// Matches each make-up to the miss it covers. A make-up that no longer matches a miss (for example after an edit
+    /// removed the miss) stays in history so it can be deleted, but does not count as made up.
     private func resolved(now: Date) -> (records: [DoseRecord], matched: Int) {
         var records = walk(now: now).records
         var unused = history.filter { $0.status == .madeUp && ($0.takenAt ?? .distantFuture) <= now }
@@ -99,8 +99,8 @@ public struct Planner: Sendable {
         return (records, matched)
     }
 
-    /// Trạng thái từng ngày VN đã qua (khoá là đầu ngày VN), cho lịch và dải 7 ngày.
-    /// Một ngày có nhiều bản ghi thì lấy trạng thái xấu nhất: hụt, trễ, đã uống, tạm dừng.
+    /// Status of each past Vietnam day (keyed by the start of the day), for the calendar and the week strip.
+    /// A day with several records takes the worst status: missed, made up, late, taken, paused.
     public func dayStatuses(now: Date) -> [Date: DoseStatus] {
         func rank(_ status: DoseStatus) -> Int {
             switch status {
@@ -113,8 +113,8 @@ public struct Planner: Sendable {
         }
         var result: [Date: DoseStatus] = [:]
         for record in timeline(now: now) {
-            // Mỗi bản ghi thuộc giờ chính gần nó nhất, như cách tính lần kế sau một lần uống.
-            // Lần uống bù thuộc ngày của lần hụt nó bù, không thuộc ngày uống.
+            // Each record belongs to its nearest main time, the same rule that picks the next dose after a take.
+            // A make-up belongs to the day of the miss it covers, not the day it was taken.
             let moment = record.status == .madeUp ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
             let slot = VietnamClock.firstMainTime(after: moment.addingTimeInterval(-12 * 3600), hour: settings.mainHour, minute: settings.mainMinute)
             let day = VietnamClock.calendar.startOfDay(for: slot)
@@ -124,15 +124,15 @@ public struct Planner: Sendable {
         return result
     }
 
-    /// Mốc kêu lại khi bấm hoãn. Không vượt quá hạn chót, hạn chót giữ nguyên.
+    /// When a snooze rings again. Never past the deadline, and the deadline stays put.
     public func snoozeUntil(now: Date) -> Date {
         let wake = now.addingTimeInterval(max(60, settings.snoozeInterval))
         let deadline = currentDose(now: now).deadlineAt
         return now < deadline ? min(wake, deadline) : wake
     }
 
-    /// Chuỗi mốc nhắc trong `horizonDays` ngày tới, sắp theo thời gian, không trùng mốc.
-    /// Các lần sau lần đang chờ được tính như thể không có xác nhận; bấm "Đã uống" thì app tính lại.
+    /// Reminder events for the next `horizonDays` days, sorted and without duplicate times.
+    /// Doses after the pending one are planned as if never confirmed; "Taken" makes the app recompute.
     public func events(now: Date, horizonDays: Int = 14) -> [ReminderEvent] {
         let end = now.addingTimeInterval(TimeInterval(horizonDays) * VietnamClock.day)
         var dose = currentDose(now: now)
@@ -152,8 +152,8 @@ public struct Planner: Sendable {
         return byDate.values.sorted { $0.date < $1.date }
     }
 
-    /// Xem trước "về lại giờ gốc" cho lần kế. `nil` khi lần đang chờ không nối thẳng từ một lần uống
-    /// (đã hụt hoặc tạm dừng thì lần kế vốn đã tính từ giờ chính).
+    /// Previews "back to the main time" for the next dose. `nil` when the pending dose does not follow directly from a take
+    /// (after a miss or a pause the next dose already starts from the main time).
     public func resetPreview(now: Date) -> ResetPreview? {
         let state = walk(now: now)
         guard state.followsTake, var take = takes(upTo: now).last else { return nil }
@@ -162,9 +162,9 @@ public struct Planner: Sendable {
         return ResetPreview(dueAt: dose.dueAt, deadlineAt: dose.deadlineAt, exceedsMaxInterval: dose.exceedsMaxInterval)
     }
 
-    // MARK: Thao tác
+    // MARK: Actions
 
-    /// Bấm "Đã uống" tại `now`. Trừ một viên nếu có đếm.
+    /// "Taken" at `now`. Subtracts a pill when counting.
     @discardableResult
     public mutating func markTaken(at now: Date) -> DoseRecord {
         let consumed = settings.pills?.consume() ?? false
@@ -173,7 +173,7 @@ public struct Planner: Sendable {
         return record
     }
 
-    /// Hoàn tác lần "Đã uống" gần nhất nếu còn trong `undoWindow`.
+    /// Undoes the latest "Taken" if still within `undoWindow`.
     @discardableResult
     public mutating func undoLastTaken(now: Date) -> Bool {
         guard let last = takes(upTo: now).last, now.timeIntervalSince(last.takenAt!) <= settings.undoWindow,
@@ -183,14 +183,14 @@ public struct Planner: Sendable {
         return true
     }
 
-    /// Sửa thời điểm uống trong lịch sử.
+    /// Edits a taken time in history.
     public mutating func editTakenTime(id: UUID, to date: Date) {
         guard let index = history.firstIndex(where: { $0.id == id }) else { return }
         history[index].takenAt = date
     }
 
-    /// Uống bù cho lần hụt có `scheduledAt` này. Trừ một viên nếu có đếm. Không đổi lịch nhắc.
-    /// Trả `nil` nếu không có lần hụt nào như vậy hoặc lần đó đã được bù.
+    /// Makes up the miss with this `scheduledAt`. Subtracts a pill when counting. Does not change the schedule.
+    /// Returns `nil` when there is no such miss or it was already made up.
     @discardableResult
     public mutating func markMadeUp(missedAt scheduledAt: Date, at now: Date) -> DoseRecord? {
         guard timeline(now: now).contains(where: { $0.status == .missed && $0.scheduledAt == scheduledAt }) else { return nil }
@@ -200,13 +200,13 @@ public struct Planner: Sendable {
         return record
     }
 
-    /// Xoá một bản ghi trong lịch sử (dùng cho lần uống bù bấm nhầm), trả lại viên nếu đã trừ.
+    /// Deletes a history record (for a mistaken make-up) and gives the pill back if one was taken.
     public mutating func removeRecord(id: UUID) {
         guard let index = history.firstIndex(where: { $0.id == id }) else { return }
         if history.remove(at: index).consumedPill { settings.pills?.restore() }
     }
 
-    /// "Về lại giờ gốc" cho lần kế. Trả kết quả để app cảnh báo nếu vượt khoảng tối đa.
+    /// "Back to the main time" for the next dose. Returns the preview so the app can warn about the maximum gap.
     @discardableResult
     public mutating func resetToMainTime(now: Date) -> ResetPreview? {
         guard let preview = resetPreview(now: now), let last = takes(upTo: now).last,
@@ -215,20 +215,20 @@ public struct Planner: Sendable {
         return preview
     }
 
-    /// "Tạm dừng nhắc N ngày" bắt đầu từ `now`.
+    /// "Pause reminders for N days" starting at `now`.
     public mutating func pause(days: Int, now: Date) {
         guard days > 0 else { return }
         settings.pauses.append(PausePeriod(start: now, end: now.addingTimeInterval(TimeInterval(days) * VietnamClock.day)))
     }
 
-    /// Kết thúc tạm dừng ngay tại `now`.
+    /// Ends any pause at `now`.
     public mutating func resume(now: Date) {
         for i in settings.pauses.indices where settings.pauses[i].contains(now) {
             settings.pauses[i].end = now
         }
     }
 
-    /// Thêm viên, hoặc bắt đầu đếm nếu trước đó chưa đếm.
+    /// Adds pills, or starts counting if not counting yet.
     public mutating func addPills(_ count: Int, now: Date) {
         if settings.pills == nil {
             settings.pills = PillCounter(count: count, at: now)
@@ -237,14 +237,14 @@ public struct Planner: Sendable {
         }
     }
 
-    // MARK: Tính lịch
+    // MARK: Scheduling
 
     private struct WalkState {
         var dose: Dose
         var missed = 0
         var late = 0
         var records: [DoseRecord] = []
-        /// Lần đang chờ được tính thẳng từ lần uống cuối, chưa qua hụt hay tạm dừng.
+        /// The pending dose follows directly from the last take, with no miss or pause in between.
         var followsTake = false
     }
 
@@ -254,11 +254,11 @@ public struct Planner: Sendable {
             .sorted { $0.takenAt! < $1.takenAt! }
     }
 
-    /// Đi lần lượt qua các lần uống tới `now`, đếm hụt và trả lần đang chờ.
+    /// Walks the takes up to `now`, counting misses, and returns the pending dose.
     private func walk(now: Date) -> WalkState {
         let taken = takes(upTo: now)
         guard let first = taken.first else {
-            // Chưa có lịch sử: lần đầu là giờ chính kế tiếp sau `now`.
+            // No history yet: the first dose is the next main time after `now`.
             var state = WalkState(dose: doseFromMainTime(VietnamClock.firstMainTime(after: now, hour: settings.mainHour, minute: settings.mainMinute)))
             advance(&state, before: now)
             return state
@@ -281,7 +281,7 @@ public struct Planner: Sendable {
         return state
     }
 
-    /// Bỏ qua các lần rơi vào tạm dừng và đếm các lần đã qua hạn chót trước thời điểm `t`.
+    /// Skips doses inside pauses and counts doses whose late window ended before `t`.
     private func advance(_ state: inout WalkState, before t: Date) {
         while true {
             if let pause = overlappingPause(state.dose, startedBy: t) {
@@ -312,8 +312,8 @@ public struct Planner: Sendable {
                     exceedsMaxInterval: false, anchor: anchor)
     }
 
-    /// Sau lần uống lúc T: lần kế thuộc giờ chính đầu tiên sau T + 12 giờ, tức lần uống T được tính
-    /// cho giờ chính gần nó nhất. Mốc nhắc = min(giờ chính đó, T + khoảng tối đa).
+    /// After a take at T: the next dose belongs to the first main time after T + 12 h, so the take at T counts
+    /// for its nearest main time. Reminder = min(that main time, T + maximum gap).
     private func doseAfterTake(_ take: DoseRecord) -> Dose {
         let t = take.takenAt!
         let slot = VietnamClock.firstMainTime(after: t.addingTimeInterval(12 * 3600), hour: settings.mainHour, minute: settings.mainMinute)
@@ -324,8 +324,8 @@ public struct Planner: Sendable {
                     exceedsMaxInterval: slot > normalDeadline, anchor: t)
     }
 
-    /// Sau một lần hụt: mốc ảo là hạn chót vừa qua (giới hạn không trễ hơn giờ chính + 12 giờ để không trôi),
-    /// nên hai báo thức có tiếng liên tiếp không bao giờ cách nhau quá khoảng tối đa.
+    /// After a miss: the virtual anchor is the deadline that passed (capped at main time + 12 h so it cannot drift),
+    /// so two consecutive ringing alarms are never further apart than the maximum gap.
     private func doseAfterMiss(_ previous: Dose) -> Dose {
         let anchor = min(previous.deadlineAt, previous.slotAt.addingTimeInterval(12 * 3600))
         var slot = previous.slotAt.addingTimeInterval(VietnamClock.day)
@@ -333,12 +333,12 @@ public struct Planner: Sendable {
         return dose(slot: slot, anchor: anchor)
     }
 
-    /// Hết tạm dừng: lần kế tính từ giờ chính đầu tiên kể từ lúc hết dừng.
+    /// After a pause: the next dose starts from the first main time at or after the pause ends.
     private func doseAfterPause(_ end: Date) -> Dose {
         doseFromMainTime(VietnamClock.firstMainTime(atOrAfter: end, hour: settings.mainHour, minute: settings.mainMinute))
     }
 
-    /// Lần nhắc đúng giờ chính, như thể lần trước uống đúng giờ chính hôm trước.
+    /// A dose at the main time, as if the previous one was taken at the main time the day before.
     private func doseFromMainTime(_ slot: Date) -> Dose {
         dose(slot: slot, anchor: slot.addingTimeInterval(-min(maxInterval, VietnamClock.day)))
     }
@@ -366,8 +366,8 @@ public struct Planner: Sendable {
             final = final.addingTimeInterval(max(60, settings.finalInterval))
         }
         list.append(event(deadline, .deadline))
-        // Quá hạn chót, tất cả có tiếng: nhắc lại như sau mốc chính, rồi theo nhịp cuối tới hết `overdueBurst`,
-        // rồi theo nhịp giờ tới hết cửa sổ trễ.
+        // Past the deadline, all ringing: repeats like after the main time, then the final cadence until `overdueBurst`,
+        // then hourly until the late window ends.
         let burstEnd = deadline.addingTimeInterval(max(0, settings.overdueBurst))
         var overdue: [Date] = (0..<max(0, settings.repeatCount)).map { deadline.addingTimeInterval(TimeInterval($0 + 1) * repeatStep) }
         var next = (overdue.last ?? deadline).addingTimeInterval(max(60, settings.finalInterval))

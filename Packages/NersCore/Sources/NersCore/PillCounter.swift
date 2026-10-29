@@ -1,21 +1,21 @@
 import Foundation
 
-/// Bộ đếm số viên. Chỉ tồn tại khi người dùng có nhập số viên.
+/// Pill counter. Only exists when the user entered a pill count.
 public struct PillCounter: Codable, Equatable, Sendable {
-    /// Tổng số viên đã nhập và thêm.
+    /// Total pills entered and added.
     public private(set) var total: Int
     public private(set) var remaining: Int
-    /// Lần nhập hoặc thêm viên gần nhất, mốc để tính `daysTaken`.
+    /// The latest time pills were entered or added, the start for `daysTaken`.
     public private(set) var countingSince: Date
 
-    /// Nhập số viên ban đầu.
+    /// Enter the initial pill count.
     public init(count: Int, at date: Date) {
         total = max(0, count)
         remaining = max(0, count)
         countingSince = date
     }
 
-    /// Trừ một viên khi uống. Trả `false` nếu đã hết viên để trừ.
+    /// Subtracts a pill for a dose. Returns `false` when none are left.
     @discardableResult
     public mutating func consume() -> Bool {
         guard remaining > 0 else { return false }
@@ -23,12 +23,12 @@ public struct PillCounter: Codable, Equatable, Sendable {
         return true
     }
 
-    /// Trả lại một viên khi hoàn tác "Đã uống".
+    /// Gives a pill back when "Taken" is undone.
     public mutating func restore() {
         remaining = min(total, remaining + 1)
     }
 
-    /// "Thêm viên": cộng vào số còn lại và tổng.
+    /// "Add pills": adds to both the remaining count and the total.
     public mutating func add(_ count: Int, at date: Date) {
         guard count > 0 else { return }
         total += count
@@ -40,7 +40,7 @@ public struct PillCounter: Codable, Equatable, Sendable {
         reminder.enabled && remaining <= reminder.daysBefore
     }
 
-    /// Dòng kèm theo mỗi lần báo uống khi tới ngưỡng mua thêm.
+    /// Line added to every alert once the refill threshold is reached.
     public func refillMessage(_ reminder: RefillReminder, language: Language = .vi) -> String? {
         guard needsRefill(reminder) else { return nil }
         return language == .en ? "\(remaining) \(remaining == 1 ? "pill" : "pills") left, time to buy more" : "còn \(remaining) viên, nhớ mua thêm"

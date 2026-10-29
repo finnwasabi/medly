@@ -3,7 +3,7 @@ import SwiftUI
 struct RootView: View {
     var selectedTab = 0
 
-    // SceneStorage để đổi ngôn ngữ (dựng lại cả cây) không nhảy về tab đầu.
+    // SceneStorage keeps the tab when a language change rebuilds the tree.
     @SceneStorage("tab") private var tab = 0
 
     var body: some View {

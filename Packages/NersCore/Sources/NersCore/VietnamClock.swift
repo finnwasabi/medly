@@ -1,7 +1,7 @@
 import Foundation
 
-/// Lịch cố định theo giờ Việt Nam. Mọi phép tính ngày giờ trong package đi qua đây,
-/// không bao giờ dùng múi giờ của máy.
+/// A calendar fixed to Vietnam time. Every date calculation in the package goes through here
+/// and never uses the device time zone.
 public enum VietnamClock {
     public static let timeZone: TimeZone = TimeZone(identifier: "Asia/Ho_Chi_Minh")!
 
@@ -13,33 +13,33 @@ public enum VietnamClock {
 
     static let day: TimeInterval = 24 * 3600
 
-    /// Giờ chính (giờ VN) của ngày VN chứa `date`.
+    /// The main time (Vietnam time) on the Vietnam day containing `date`.
     static func mainTime(onDayOf date: Date, hour: Int, minute: Int) -> Date {
         let start = calendar.startOfDay(for: date)
         return start.addingTimeInterval(TimeInterval(hour * 3600 + minute * 60))
     }
 
-    /// Giờ chính đầu tiên lớn hơn hẳn `date`.
+    /// The first main time strictly after `date`.
     static func firstMainTime(after date: Date, hour: Int, minute: Int) -> Date {
         let candidate = mainTime(onDayOf: date, hour: hour, minute: minute)
         return candidate > date ? candidate : mainTime(onDayOf: candidate.addingTimeInterval(day), hour: hour, minute: minute)
     }
 
-    /// Giờ chính đầu tiên lớn hơn hoặc bằng `date`.
+    /// The first main time at or after `date`.
     static func firstMainTime(atOrAfter date: Date, hour: Int, minute: Int) -> Date {
         let candidate = mainTime(onDayOf: date, hour: hour, minute: minute)
         return candidate >= date ? candidate : firstMainTime(after: date, hour: hour, minute: minute)
     }
 }
 
-/// Ngôn ngữ chữ hiển thị. App chọn trong Cài đặt, không theo ngôn ngữ máy.
+/// Display language. Chosen in the app's Settings, not taken from the device.
 public enum Language: String, Codable, CaseIterable, Sendable {
     case vi, en
 }
 
-/// Định dạng giờ hiển thị. Không phụ thuộc locale hay múi giờ của máy.
+/// Time formatting. Independent of the device locale and time zone.
 public enum TimeFormatting {
-    /// "HH:mm" theo múi giờ truyền vào.
+    /// "HH:mm" in the given time zone.
     public static func clockTime(_ date: Date, in timeZone: TimeZone) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
@@ -47,19 +47,19 @@ public enum TimeFormatting {
         return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
     }
 
-    /// Ví dụ "21:00 giờ VN", tiếng Anh "21:00 VN time".
+    /// For example "21:00 giờ VN", or "21:00 VN time" in English.
     public static func vietnamTime(_ date: Date, language: Language = .vi) -> String {
         clockTime(date, in: VietnamClock.timeZone) + (language == .en ? " VN time" : " giờ VN")
     }
 
-    /// Giờ VN kèm giờ nơi máy đang ở, ví dụ "21:00 giờ VN, 23:00 giờ máy".
-    /// App truyền `TimeZone.current` vào đây, package không tự đọc.
+    /// Vietnam time plus the device time, for example "21:00 giờ VN, 23:00 giờ máy".
+    /// The app passes `TimeZone.current` in; the package never reads it.
     public static func dualTime(_ date: Date, deviceTimeZone: TimeZone, language: Language = .vi) -> String {
         vietnamTime(date, language: language) + ", " + clockTime(date, in: deviceTimeZone) + (language == .en ? " device time" : " giờ máy")
     }
 }
 
-/// Chuỗi thời điểm UTC ISO 8601 không phần lẻ giây, dùng cho JSON đồng bộ.
+/// UTC ISO 8601 timestamps without fractional seconds, for the sync JSON.
 enum UTCTimestamp {
     static func floorToSecond(_ date: Date) -> Date {
         Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down))

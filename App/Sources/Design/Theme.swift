@@ -2,8 +2,8 @@ import NersCore
 import SwiftUI
 import UIKit
 
-// Bảng màu 3 tầng: một màu chính (hồng đất), một dải xám ấm, các màu trạng thái dịu.
-// Mỗi màu có bản sáng và bản tối, chữ trên nền đều đạt WCAG AA.
+// Three-tier palette: one primary (dusty rose), a warm grey ramp, and soft status colors.
+// Every color has a light and a dark variant, and text on its background meets WCAG AA.
 enum Palette {
     static let primary = Color(light: 0xC8435E, dark: 0xF07A92)
     static let onPrimary = Color(light: 0xFFFFFF, dark: 0x2A0F17)
@@ -16,9 +16,9 @@ enum Palette {
     static let textSecondary = Color(light: 0x6E6166, dark: 0xB8AAB0)
 }
 
-// Trạng thái một lần uống. Màu cố định: xanh lá = đã uống, vàng = trễ, xanh dương = hụt nhưng đã uống bù,
-// đỏ = hụt, xám = tạm dừng. Uống bù cần màu riêng vì ô lịch chỉ có số ngày, không có biểu tượng.
-// Luôn đi kèm chữ và biểu tượng, không dùng màu một mình.
+// Dose status. Fixed colors: green = taken, amber = late, blue = missed but made up,
+// red = missed, grey = paused. Made up needs its own color because calendar cells show only the day number.
+// Always paired with a label and an icon, never color alone.
 enum DoseStatus {
     case taken, late, madeUp, missed, paused, upcoming
 
@@ -110,7 +110,7 @@ extension View {
     func card() -> some View { modifier(CardModifier()) }
 }
 
-// Nút bị khoá phải trông khác nút bấm được, không thì người dùng tưởng app treo.
+// Disabled buttons must look different from enabled ones, or users think the app froze.
 struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 

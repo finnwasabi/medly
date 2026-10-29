@@ -1,30 +1,30 @@
 import Foundation
 
 public enum DoseStatus: String, Codable, Sendable {
-    /// Đã xác nhận uống. Chỉ bản ghi loại này được lưu trong lịch sử.
+    /// Confirmed as taken. The only kind stored in history besides make-ups.
     case taken
-    /// Uống sau hạn chót nhưng còn trong cửa sổ trễ. Chỉ xuất hiện trong `Planner.timeline`.
+    /// Taken after the deadline but within the late window. Only appears in `Planner.timeline`.
     case late
-    /// Qua hạn chót mà không xác nhận. Chỉ xuất hiện trong `Planner.timeline`.
+    /// Not confirmed by the end of the late window. Only appears in `Planner.timeline`.
     case missed
-    /// Rơi vào khoảng tạm dừng, không tính hụt. Chỉ xuất hiện trong `Planner.timeline`.
+    /// Fell inside a pause, never counted as missed. Only appears in `Planner.timeline`.
     case paused
-    /// Uống bù cho một lần đã hụt. Được lưu trong lịch sử nhưng không tính vào lịch nhắc.
+    /// A make-up for a missed dose. Stored in history but ignored by the schedule.
     case madeUp
 }
 
 public struct DoseRecord: Codable, Equatable, Identifiable, Sendable {
     public var id: UUID
-    /// Mốc nhắc của lần uống này.
+    /// The reminder time of this dose.
     public var scheduledAt: Date
-    /// Thời điểm uống thật, sửa được trong lịch sử.
+    /// When it was actually taken, editable in History.
     public var takenAt: Date?
     public var status: DoseStatus
-    /// Đúng khi lần uống này đã trừ một viên, để hoàn tác trả lại đúng.
+    /// True when this dose consumed a pill, so undo gives the right one back.
     public var consumedPill: Bool
-    /// Người dùng chọn "về lại giờ gốc" cho lần kế sau lần uống này.
+    /// The user chose "back to the main time" for the dose after this one.
     public var nextAtMainTime: Bool
-    /// Với lần uống bù: `scheduledAt` của lần hụt được bù.
+    /// For a make-up: the `scheduledAt` of the missed dose it covers.
     public var makesUpFor: Date?
 
     public init(

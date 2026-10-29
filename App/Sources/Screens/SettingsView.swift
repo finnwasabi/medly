@@ -137,7 +137,7 @@ struct SettingsView: View {
         }
     }
 
-    /// Giờ chính dưới dạng `Date` hôm nay theo giờ VN, để dùng với DatePicker.
+    /// The main time as today's `Date` in Vietnam time, for the DatePicker.
     private var mainTime: Binding<Date> {
         Binding(
             get: {
@@ -169,7 +169,7 @@ struct SettingsView: View {
     }
 }
 
-/// Nhập số viên lần đầu, hoặc thêm viên khi mua vỉ mới.
+/// Enter the first pill count, or add pills after buying a new pack.
 struct PillsSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Lần mở đầu, sau khi chọn ngôn ngữ: hỏi tên người dùng, rồi hỏi có muốn thêm partner không (bỏ qua được).
+/// First launch, after the language: asks for the user's name, then offers to add a partner (skippable).
 struct ProfileView: View {
     var onFinish: () -> Void
 

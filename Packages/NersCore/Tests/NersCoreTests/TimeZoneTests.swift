@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import NersCore
 
-/// Đổi múi giờ mặc định của tiến trình (giống người dùng đổi múi giờ máy) rồi so kết quả.
-/// Chạy tuần tự vì đổi trạng thái toàn cục.
+/// Changes the process time zone (like a user changing the phone's) and compares results.
+/// Serialized because it changes global state.
 @Suite(.serialized) struct TimeZoneTests {
     private func scenario() throws -> (events: [ReminderEvent], json: Data, next: Date, missed: Int) {
         var planner = Planner(settings: ReminderSettings(mainHour: 23, mainMinute: 30, pills: PillCounter(count: 30, at: vn(2026, 10, 1, 9))))

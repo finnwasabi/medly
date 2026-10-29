@@ -1,9 +1,9 @@
 import Foundation
 
-/// Cài đặt nhắc mua thêm thuốc. Tên trường khớp `refillReminder` trong snapshot.
+/// Refill reminder settings. Field names match `refillReminder` in the snapshot.
 public struct RefillReminder: Codable, Equatable, Sendable {
     public var enabled: Bool
-    /// Nhắc khi số viên còn lại nhỏ hơn hoặc bằng số này.
+    /// Remind when the remaining pills are at or below this.
     public var daysBefore: Int
 
     public init(enabled: Bool = true, daysBefore: Int = 7) {
@@ -12,7 +12,7 @@ public struct RefillReminder: Codable, Equatable, Sendable {
     }
 }
 
-/// Một khoảng tạm dừng nhắc, [start, end).
+/// A pause in reminders, [start, end).
 public struct PausePeriod: Codable, Equatable, Sendable {
     public var start: Date
     public var end: Date
@@ -25,36 +25,36 @@ public struct PausePeriod: Codable, Equatable, Sendable {
     public func contains(_ date: Date) -> Bool { date >= start && date < end }
 }
 
-/// Cài đặt nhắc uống thuốc. Mọi khoảng thời gian tính bằng giây.
+/// Reminder settings. All intervals are in seconds.
 public struct ReminderSettings: Codable, Equatable, Sendable {
-    /// Giờ chính theo giờ VN.
+    /// Main time in Vietnam time.
     public var mainHour: Int
     public var mainMinute: Int
-    /// Khoảng tối đa giữa hai lần uống liên tiếp.
+    /// Maximum gap between two consecutive doses.
     public var maxInterval: TimeInterval
-    /// Số lần nhắc lại ngay sau mốc chính và khoảng cách giữa chúng.
+    /// How many repeats follow the main reminder, and their spacing.
     public var repeatCount: Int
     public var repeatInterval: TimeInterval
-    /// Nhịp nhắc sau khi hết các lần nhắc lại.
+    /// Cadence after the repeats.
     public var hourlyInterval: TimeInterval
-    /// Cửa sổ cuối trước hạn chót và nhịp nhắc trong cửa sổ đó.
+    /// The final window before the deadline and its cadence.
     public var finalWindow: TimeInterval
     public var finalInterval: TimeInterval
-    /// Hoãn: kêu lại sau khoảng này.
+    /// Snooze: ring again after this.
     public var snoozeInterval: TimeInterval
-    /// Thời gian cho phép hoàn tác "Đã uống".
+    /// How long "Taken" can be undone.
     public var undoWindow: TimeInterval
-    /// Sau hạn chót bao lâu thì một lần chưa uống mới tính hụt. Uống trong khoảng này tính trễ.
+    /// How long after the deadline an untaken dose becomes missed. Taking it within this counts as late.
     public var lateWindow: TimeInterval
-    /// Uống sau hạn chót trong khoảng này vẫn tính đúng giờ, để chênh vài giây hay vài phút không thành trễ.
-    /// Chỉ ảnh hưởng cách đếm, báo thức vẫn kêu đúng hạn chót.
+    /// A dose this soon after the deadline still counts as on time, so seconds or minutes do not make it late.
+    /// Only affects counting; the alarm still rings at the deadline.
     public var lateTolerance: TimeInterval
-    /// Khoảng đầu sau hạn chót nhắc dồn dập theo `finalInterval`, sau đó theo `hourlyInterval`.
+    /// The first stretch after the deadline repeats at `finalInterval`, then at `hourlyInterval`.
     public var overdueBurst: TimeInterval
-    /// Bộ đếm viên, `nil` nghĩa là không đếm.
+    /// Pill counter; `nil` means not counting.
     public var pills: PillCounter?
     public var refillReminder: RefillReminder
-    /// Các khoảng tạm dừng, giữ lại cả khoảng đã qua để không tính hụt trong đó.
+    /// Pauses, including past ones, so nothing inside them counts as missed.
     public var pauses: [PausePeriod]
 
     public init(
@@ -93,12 +93,12 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         self.pauses = pauses
     }
 
-    /// Thời điểm hết tạm dừng nếu `now` đang nằm trong một khoảng dừng.
+    /// When the pause ends, if `now` is inside one.
     public func pausedUntil(now: Date) -> Date? {
         pauses.filter { $0.contains(now) }.map(\.end).max()
     }
 
-    // Giải mã chịu được trường thiếu: trường nào không có thì lấy mặc định.
+    // Tolerant decoding: missing fields fall back to defaults.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = ReminderSettings()

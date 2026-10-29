@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Sinh source.json (định dạng AltStore/SideStore) cho một bản phát hành.
+"""Generates source.json (AltStore/SideStore format) for a release.
 
-Dùng: make-source.py <file .ipa> <version> <build> <url tải .ipa> <ngày YYYY-MM-DD>
+Usage: make-source.py <ipa file> <version> <build> <ipa download url> <date YYYY-MM-DD>
 """
 import json
 import os
@@ -11,15 +11,15 @@ ipa, version, build, url, date = sys.argv[1:6]
 repo = "https://github.com/finnwasabi/ners-daily"
 icon = "https://raw.githubusercontent.com/finnwasabi/ners-daily/main/docs/icon.png"
 description = (
-    "Nhắc uống thuốc hằng ngày theo giờ Việt Nam, dù máy đang ở múi giờ nào. "
-    "Báo thức kêu cả khi máy im lặng hay bật Focus, nhắc lại tới khi xác nhận đã uống, "
-    "đếm số viên và nhắc mua thêm. Chạy không cần mạng."
+    "A daily pill reminder that always runs on Vietnam time, whatever time zone the phone is in. "
+    "Alarms ring on silent and in Focus and keep reminding until the dose is confirmed. "
+    "Optional pill counting with refill reminders. Works offline. Vietnamese and English."
 )
 
 source = {
     "name": "Ner's Daily",
     "identifier": "io.github.finnwasabi.nersdaily.source",
-    "subtitle": "Nhắc uống thuốc theo giờ Việt Nam",
+    "subtitle": "Daily pill reminder on Vietnam time",
     "description": description,
     "iconURL": icon,
     "website": repo,
@@ -29,7 +29,7 @@ source = {
             "name": "Ner's Daily",
             "bundleIdentifier": "io.github.finnwasabi.nersdaily",
             "developerName": "Lê Nhật Tùng",
-            "subtitle": "Nhắc uống thuốc theo giờ Việt Nam",
+            "subtitle": "Daily pill reminder on Vietnam time",
             "localizedDescription": description,
             "iconURL": icon,
             "tintColor": "#C8435E",
@@ -43,13 +43,13 @@ source = {
                     "size": os.path.getsize(ipa),
                     "downloadURL": url,
                     "minOSVersion": "26.0",
-                    "localizedDescription": f"Bản {version}. Xem ghi chú tại {repo}/releases",
+                    "localizedDescription": f"Version {version}. Release notes: {repo}/releases",
                 }
             ],
             "appPermissions": {
                 "entitlements": [],
                 "privacy": {
-                    "NSAlarmKitUsageDescription": "Đặt báo thức để nhắc uống thuốc đúng giờ, kể cả khi máy đang im lặng."
+                    "NSAlarmKitUsageDescription": "Sets alarms to remind you to take your pill on time, even when your phone is on silent."
                 },
             },
         }
