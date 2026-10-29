@@ -8,6 +8,7 @@ import { createApp, createBot, createStore, changeText, statusText, validateSnap
 // Mẫu đúng như docs/spec.md.
 const spec = {
   schemaVersion: 1,
+  name: 'Ner',
   updatedAt: '2026-10-27T14:03:00Z',
   lastTakenAt: '2026-10-27T14:03:00Z',
   nextDueAt: '2026-10-28T14:00:00Z',
@@ -100,6 +101,12 @@ test('make-up dose is reported and counted apart from missed ones', () => {
   assert.match(changeText(missed, madeUp), /uống bù viên hụt \(còn 1 viên hụt chưa bù\)/);
   assert.match(statusText(madeUp, Date.parse('2026-10-28T01:00:00Z')), /hụt 1, đã uống bù 1\./);
   assert.match(validateSnapshot({ ...spec, madeUpCount: -1 }), /madeUpCount/);
+});
+
+test('messages use the name from the app, or a neutral word without one', () => {
+  assert.match(changeText(null, { ...spec, name: null }), /^✅ Người ấy đã uống/);
+  assert.match(statusText({ ...spec, name: 'Mai' }), /^💊 Mai/);
+  assert.match(validateSnapshot({ ...spec, name: 'x'.repeat(61) }), /name/);
 });
 
 test('undo is reported as undo, not as a new dose at the older time', () => {

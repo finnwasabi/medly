@@ -28,11 +28,14 @@ export function vnDateKey(ms) {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 
+/// Tên người dùng app gửi kèm snapshot; chưa có thì gọi trung tính.
+export const who = (s) => (typeof s?.name === 'string' && s.name.trim()) || 'Người ấy';
+
 /// Trạng thái đầy đủ cho /check và bản tin 09:00.
 export function statusText(snapshot, now = Date.now()) {
   if (!snapshot) return 'Chưa nhận được dữ liệu nào từ app.';
   const s = snapshot;
-  const lines = ["💊 Ner's Daily"];
+  const lines = [`💊 ${who(s)}`];
   lines.push(s.lastTakenAt
     ? `Uống gần nhất: ${vnTime(s.lastTakenAt)} giờ VN, ${vnDay(s.lastTakenAt)}`
     : 'Chưa có lần uống nào.');
@@ -60,20 +63,20 @@ export function changeText(previous, next) {
   const parts = [];
   const taken = (s) => (s?.lastTakenAt ? Date.parse(s.lastTakenAt) : 0);
   if (taken(next) > taken(previous)) {
-    let line = `✅ Ner đã uống lúc ${vnTime(next.lastTakenAt)} giờ VN`;
+    let line = `✅ ${who(next)} đã uống lúc ${vnTime(next.lastTakenAt)} giờ VN`;
     if (next.pillsTotal != null) line += `, còn ${next.pillsRemaining} viên`;
     parts.push(line + '.');
   } else if (taken(next) < taken(previous)) {
     // Lần uống mới nhất lùi lại: hoàn tác, hoặc sửa giờ sớm hơn trong Lịch sử.
-    parts.push('↩️ Ner đã hoàn tác hoặc sửa giờ lần uống gần nhất.');
+    parts.push(`↩️ ${who(next)} đã hoàn tác hoặc sửa giờ lần uống gần nhất.`);
   }
   if (previous && next.lateCount > (previous.lateCount ?? 0)) parts.push(`🟡 Có thêm lần uống trễ (tổng ${next.lateCount}).`);
   if (previous && next.missedCount > previous.missedCount) parts.push(`🔴 Có thêm viên hụt (tổng ${next.missedCount}).`);
   if (previous && (next.madeUpCount ?? 0) > (previous.madeUpCount ?? 0)) {
-    parts.push(`🔵 Ner đã uống bù viên hụt (còn ${next.missedCount - next.madeUpCount} viên hụt chưa bù).`);
+    parts.push(`🔵 ${who(next)} đã uống bù viên hụt (còn ${next.missedCount - next.madeUpCount} viên hụt chưa bù).`);
   }
   if (next.pausedUntil && next.pausedUntil !== previous?.pausedUntil) {
-    parts.push(`⏸️ Ner tạm dừng nhắc tới ${vnTime(next.pausedUntil)} ${vnDay(next.pausedUntil)}.`);
+    parts.push(`⏸️ ${who(next)} tạm dừng nhắc tới ${vnTime(next.pausedUntil)} ${vnDay(next.pausedUntil)}.`);
   }
   const refill = (s) => s?.pillsTotal != null && s.refillReminder?.enabled && s.pillsRemaining <= s.refillReminder.daysBefore;
   if (refill(next) && !refill(previous)) parts.push(`🛒 Còn ${next.pillsRemaining} viên, nhớ mua vỉ mới.`);
@@ -86,6 +89,7 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 export function validateSnapshot(s) {
   if (!s || typeof s !== 'object') return 'body must be a JSON object';
   if (s.schemaVersion !== 1) return 'schemaVersion must be 1';
+  if (s.name != null && (typeof s.name !== 'string' || s.name.length > 60)) return 'name must be a short string or null';
   for (const key of ['updatedAt', 'nextDueAt', 'deadlineAt']) {
     if (typeof s[key] !== 'string' || !ISO.test(s[key])) return `${key} must be a UTC ISO 8601 timestamp`;
   }
@@ -204,9 +208,9 @@ export function createBot({ token, chatId, store, publicUrl, apiToken, fetchImpl
         return say(statusText(store.get().snapshot));
       case '/msg':
         store.set({ message: argument || null });
-        return say(argument ? `Đã lưu lời nhắn, Ner thấy ở lần đồng bộ tới:\n${argument}` : 'Đã xoá lời nhắn.');
+        return say(argument ? `Đã lưu lời nhắn, ${who(store.get().snapshot)} thấy ở lần đồng bộ tới:\n${argument}` : 'Đã xoá lời nhắn.');
       case '/link':
-        return say(`Mã kết nối, dán vào Cài đặt > Theo dõi cùng trong app của Ner:\n${publicUrl}#${apiToken}`);
+        return say(`Mã kết nối, dán vào Cài đặt > Theo dõi cùng trong app Ner's Daily:\n${publicUrl}#${apiToken}`);
       default:
         return say(['/check: trạng thái mới nhất', '/msg <lời nhắn>: gửi lời nhắn hiện trong app (để trống để xoá)',
           '/link: mã kết nối cho app'].join('\n'));
@@ -241,7 +245,7 @@ export function createBot({ token, chatId, store, publicUrl, apiToken, fetchImpl
 
   return { say, handle, poll, dailyReport, setCommands: () => call('setMyCommands', { commands: [
     { command: 'check', description: 'Trạng thái mới nhất' },
-    { command: 'msg', description: 'Gửi lời nhắn cho Ner' },
+    { command: 'msg', description: 'Gửi lời nhắn hiện trong app' },
     { command: 'link', description: 'Mã kết nối cho app' },
   ] }) };
 }

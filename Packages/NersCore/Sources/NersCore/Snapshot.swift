@@ -6,6 +6,8 @@ public struct Snapshot: Codable, Equatable, Sendable {
     public static let currentSchemaVersion = 1
 
     public var schemaVersion: Int
+    /// Tên người dùng nhập trong app, để bot gọi đúng tên. `nil` khi chưa nhập.
+    public var name: String?
     public var updatedAt: Date
     public var lastTakenAt: Date?
     public var nextDueAt: Date
@@ -71,13 +73,14 @@ public struct Snapshot: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case schemaVersion, updatedAt, lastTakenAt, nextDueAt, deadlineAt, daysTaken, missedCount, lateCount, madeUpCount
+        case schemaVersion, name, updatedAt, lastTakenAt, nextDueAt, deadlineAt, daysTaken, missedCount, lateCount, madeUpCount
         case pillsTotal, pillsRemaining, refillReminder, pausedUntil
     }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(schemaVersion, forKey: .schemaVersion)
+        try c.encode(name, forKey: .name)
         try c.encode(UTCTimestamp.string(from: updatedAt), forKey: .updatedAt)
         // Dùng encode cho Optional để ghi `null` thay vì bỏ trường.
         try c.encode(lastTakenAt.map(UTCTimestamp.string(from:)), forKey: .lastTakenAt)
@@ -123,6 +126,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
             refillReminder: try c.decode(RefillReminder.self, forKey: .refillReminder),
             pausedUntil: try date(.pausedUntil)
         )
+        name = try c.decodeIfPresent(String.self, forKey: .name)
     }
 
     /// JSON gửi lên server, khoá sắp xếp để kết quả ổn định.

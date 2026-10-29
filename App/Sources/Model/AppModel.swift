@@ -27,6 +27,31 @@ final class AppModel {
         }
     }
 
+    // MARK: Tên
+
+    /// Tên người dùng chính, nhập ở lần mở đầu hoặc trong Cài đặt. Gửi kèm snapshot để bot gọi đúng tên.
+    // Không đồng bộ ở đây vì đổi theo từng phím gõ; tên đi theo lần đồng bộ kế tiếp.
+    var userName: String = UserDefaults.standard.string(forKey: "userName") ?? "" {
+        didSet { UserDefaults.standard.set(userName, forKey: "userName") }
+    }
+
+    /// Tên người theo dõi cùng, tuỳ chọn.
+    var partnerName: String = UserDefaults.standard.string(forKey: "partnerName") ?? "" {
+        didSet { UserDefaults.standard.set(partnerName, forKey: "partnerName") }
+    }
+
+    /// Lời chào: tên người dùng, chưa có thì "bạn".
+    var greeting: String {
+        let name = userName.trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? L("Chào bạn", "Hi there") : L("Chào \(name)", "Hi \(name)")
+    }
+
+    /// Cách gọi người theo dõi cùng trong câu: tên đã nhập, chưa có thì "người ấy".
+    var partner: String {
+        let name = partnerName.trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? L("người ấy", "your partner") : name
+    }
+
     /// Chỉ rung: các lần nhắc là noti thường theo chế độ máy, riêng hạn chót vẫn là báo thức có tiếng.
     var vibrateOnly: Bool {
         didSet {
@@ -92,7 +117,10 @@ final class AppModel {
     func sync() async {
         guard shareEnabled, let connection else { return }
         do {
-            let reply = try await syncClient.send(planner.snapshot(now: .now), to: connection)
+            var snapshot = planner.snapshot(now: .now)
+            let name = userName.trimmingCharacters(in: .whitespaces)
+            snapshot.name = name.isEmpty ? nil : String(name.prefix(60))
+            let reply = try await syncClient.send(snapshot, to: connection)
             message = reply.message
             UserDefaults.standard.set(reply.message, forKey: "message")
             lastSync = .now

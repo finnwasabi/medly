@@ -66,6 +66,7 @@ bản cũ hơn bị bỏ qua (trả 200 kèm `"stale": true`).
 ```json
 {
   "schemaVersion": 1,
+  "name": "Ner",
   "updatedAt": "2026-10-27T14:03:00Z",
   "lastTakenAt": "2026-10-27T14:03:00Z",
   "nextDueAt": "2026-10-28T14:00:00Z",
@@ -82,7 +83,7 @@ bản cũ hơn bị bỏ qua (trả 200 kèm `"stale": true`).
 ```
 
 - Mọi mốc giờ là UTC ISO 8601 không có phần lẻ giây. `pillsTotal`, `pillsRemaining` là `null` khi không đếm viên.
-  `lastTakenAt`, `pausedUntil` có thể `null`. `missedCount` đếm mọi lần hụt, kể cả lần đã bù; `madeUpCount` là số lần đã bù.
+  `lastTakenAt`, `pausedUntil`, `name` có thể `null`. `name` là tên người dùng nhập trong app để bot gọi đúng tên. `missedCount` đếm mọi lần hụt, kể cả lần đã bù; `madeUpCount` là số lần đã bù.
   Bản app cũ không gửi `lateCount`, `madeUpCount`: server coi như 0.
 - `GET /v1/snapshot` (cùng token) trả bản mới nhất, 404 nếu chưa có.
 

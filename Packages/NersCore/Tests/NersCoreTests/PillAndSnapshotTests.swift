@@ -47,6 +47,7 @@ import Testing
     static let specJSON = """
     {
       "schemaVersion": 1,
+      "name": null,
       "updatedAt": "2026-10-27T14:03:00Z",
       "lastTakenAt": "2026-10-27T14:03:00Z",
       "nextDueAt": "2026-10-28T14:00:00Z",
@@ -94,7 +95,7 @@ import Testing
         }
         #expect(json["pausedUntil"] as? String == "2026-10-29T01:00:00Z")
         #expect(json["updatedAt"] as? String == "2026-10-27T01:00:00Z")
-        #expect(json.count == 13)
+        #expect(json.count == 14)
 
         let decoded = try Snapshot.decode(from: data)
         #expect(decoded == snapshot)
