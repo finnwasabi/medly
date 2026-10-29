@@ -32,13 +32,14 @@ struct HistoryView: View {
     }
 
     private func summaryCard(planner: Planner, now: Date) -> some View {
-        HStack(spacing: 0) {
-            stat(value: planner.daysTaken(now: now), label: L("ngày đã uống", "days taken"), color: DoseStatus.taken.foreground)
-            Divider().frame(height: 40)
+        // Top alignment keeps the numbers level even if one label wraps.
+        HStack(alignment: .top, spacing: 0) {
+            stat(value: planner.daysTaken(now: now), label: L("đã uống", "taken"), color: DoseStatus.taken.foreground)
+            Divider().frame(height: 40).padding(.top, 6)
             stat(value: planner.lateCount(now: now), label: L("lần trễ", "late"), color: DoseStatus.late.foreground)
-            Divider().frame(height: 40)
+            Divider().frame(height: 40).padding(.top, 6)
             stat(value: planner.madeUpCount(now: now), label: L("uống bù", "made up"), color: DoseStatus.madeUp.foreground)
-            Divider().frame(height: 40)
+            Divider().frame(height: 40).padding(.top, 6)
             stat(value: planner.missedCount(now: now) - planner.madeUpCount(now: now), label: L("viên hụt", "missed"), color: DoseStatus.missed.foreground)
         }
         // Four columns: cap the text size so labels never break mid-word.
