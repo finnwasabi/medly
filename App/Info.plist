@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>vi</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>Ner's Daily</string>
 	<key>CFBundleExecutable</key>
@@ -26,7 +26,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSAlarmKitUsageDescription</key>
-	<string>Ner's Daily cần đặt báo thức để nhắc bạn uống thuốc đúng giờ, kể cả khi máy đang im lặng.</string>
+	<string>Ner's Daily sets alarms to remind you to take your pill on time, even when your phone is on silent.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UILaunchScreen</key>

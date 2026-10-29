@@ -38,3 +38,8 @@ body:
     attributes:
       label: Area
       options: [Alarms and notifications, Schedule or time zones, History, Pill counting, Sync and bot, Install or update, Other]
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Optional. Crop out names and anything personal.

@@ -8,6 +8,10 @@
 
 <!-- Tests added or run, simulator or device, light and dark mode, both languages. -->
 
+## Screenshots
+
+<!-- For UI changes: before and after, light and dark, Vietnamese and English. Use made-up names only. -->
+
 ## Checklist
 
 - [ ] The base branch is `develop`
