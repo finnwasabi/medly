@@ -258,11 +258,16 @@ struct TodayView: View {
         let calendar = VietnamClock.calendar
         let today = calendar.startOfDay(for: now)
         let statuses = model.planner.dayStatuses(now: now)
+        // The only past day that can lack a record is the pending dose while it is overdue (still in its late
+        // window). Any other gap is before the user started, so it shows "no data", not late.
+        let dose = model.planner.currentDose(now: now)
+        let overdueDay = now >= dose.dueAt ? calendar.startOfDay(for: dose.slotAt) : nil
         let days: [(name: String, status: DoseStatus)] = (0..<7).reversed().map { back in
             let day = calendar.date(byAdding: .day, value: -back, to: today)!
             let name = TodayText.shortWeekday(calendar.component(.weekday, from: day))
-            // A past day without a record yet is the overdue dose still in its late window.
-            return (name, statuses[day].map(DoseStatus.init) ?? (day < today ? .late : .upcoming))
+            if let status = statuses[day] { return (name, DoseStatus(status)) }
+            if day == overdueDay { return (name, .late) }
+            return (name, day < today ? .noData : .upcoming)
         }
         return VStack(alignment: .leading, spacing: 12) {
             Text(L("7 ngày qua", "Last 7 days"))

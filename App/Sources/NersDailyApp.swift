@@ -32,13 +32,14 @@ struct NersDailyApp: App {
         }
     }
 
-    // The `-screen` launch argument only exists for screenshots (language, profile, onboarding, history, settings).
+    // The `-screen` launch argument only exists for screenshots (language, profile, onboarding, today, history, settings).
     @ViewBuilder
     private var launchScreen: some View {
         switch UserDefaults.standard.string(forKey: "screen") {
         case "language": LanguageView { _ in }
         case "profile": ProfileView {}
         case "onboarding": OnboardingView {}
+        case "today": RootView()
         case "history": RootView(selectedTab: 1)
         case "settings": RootView(selectedTab: 2)
         default:

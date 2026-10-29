@@ -21,6 +21,8 @@ enum Palette {
 // Always paired with a label and an icon, never color alone.
 enum DoseStatus {
     case taken, late, madeUp, missed, paused, upcoming
+    /// A past day before the user started, with nothing to report.
+    case noData
 
     var label: String {
         switch self {
@@ -30,6 +32,7 @@ enum DoseStatus {
         case .missed: L("Hụt", "Missed")
         case .paused: L("Tạm dừng", "Paused")
         case .upcoming: L("Sắp tới", "Upcoming")
+        case .noData: L("Chưa có dữ liệu", "No data")
         }
     }
 
@@ -41,6 +44,7 @@ enum DoseStatus {
         case .missed: "xmark.circle.fill"
         case .paused: "pause.circle.fill"
         case .upcoming: "circle.dotted"
+        case .noData: "minus.circle"
         }
     }
 
@@ -50,7 +54,7 @@ enum DoseStatus {
         case .late: Color(light: 0xFFF1D6, dark: 0x3D2F12)
         case .madeUp: Color(light: 0xE3ECFA, dark: 0x1D2A44)
         case .missed: Color(light: 0xFDE4E4, dark: 0x42191C)
-        case .paused, .upcoming: Color(light: 0xEEE9E7, dark: 0x2E2730)
+        case .paused, .upcoming, .noData: Color(light: 0xEEE9E7, dark: 0x2E2730)
         }
     }
 
@@ -60,7 +64,7 @@ enum DoseStatus {
         case .late: Color(light: 0x8A5A00, dark: 0xF2C46B)
         case .madeUp: Color(light: 0x2B5797, dark: 0x9DBCF2)
         case .missed: Color(light: 0xA8282E, dark: 0xF39A9E)
-        case .paused, .upcoming: Color(light: 0x5F5559, dark: 0xC9BEC3)
+        case .paused, .upcoming, .noData: Color(light: 0x5F5559, dark: 0xC9BEC3)
         }
     }
 }
