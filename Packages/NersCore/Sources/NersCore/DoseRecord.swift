@@ -3,6 +3,8 @@ import Foundation
 public enum DoseStatus: String, Codable, Sendable {
     /// Đã xác nhận uống. Chỉ bản ghi loại này được lưu trong lịch sử.
     case taken
+    /// Uống sau hạn chót nhưng còn trong cửa sổ trễ. Chỉ xuất hiện trong `Planner.timeline`.
+    case late
     /// Qua hạn chót mà không xác nhận. Chỉ xuất hiện trong `Planner.timeline`.
     case missed
     /// Rơi vào khoảng tạm dừng, không tính hụt. Chỉ xuất hiện trong `Planner.timeline`.

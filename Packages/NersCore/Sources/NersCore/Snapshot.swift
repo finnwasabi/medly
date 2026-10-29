@@ -12,6 +12,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
     public var deadlineAt: Date
     public var daysTaken: Int
     public var missedCount: Int
+    public var lateCount: Int
     public var pillsTotal: Int?
     public var pillsRemaining: Int?
     public var refillReminder: RefillReminder
@@ -25,6 +26,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         deadlineAt: Date,
         daysTaken: Int,
         missedCount: Int,
+        lateCount: Int,
         pillsTotal: Int?,
         pillsRemaining: Int?,
         refillReminder: RefillReminder,
@@ -37,6 +39,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         self.deadlineAt = UTCTimestamp.floorToSecond(deadlineAt)
         self.daysTaken = daysTaken
         self.missedCount = missedCount
+        self.lateCount = lateCount
         self.pillsTotal = pillsTotal
         self.pillsRemaining = pillsRemaining
         self.refillReminder = refillReminder
@@ -54,6 +57,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
             deadlineAt: dose.deadlineAt,
             daysTaken: planner.daysTaken(now: now),
             missedCount: planner.missedCount(now: now),
+            lateCount: planner.lateCount(now: now),
             pillsTotal: settings.pills?.total,
             pillsRemaining: settings.pills?.remaining,
             refillReminder: settings.refillReminder,
@@ -62,7 +66,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case schemaVersion, updatedAt, lastTakenAt, nextDueAt, deadlineAt, daysTaken, missedCount
+        case schemaVersion, updatedAt, lastTakenAt, nextDueAt, deadlineAt, daysTaken, missedCount, lateCount
         case pillsTotal, pillsRemaining, refillReminder, pausedUntil
     }
 
@@ -76,6 +80,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         try c.encode(UTCTimestamp.string(from: deadlineAt), forKey: .deadlineAt)
         try c.encode(daysTaken, forKey: .daysTaken)
         try c.encode(missedCount, forKey: .missedCount)
+        try c.encode(lateCount, forKey: .lateCount)
         try c.encode(pillsTotal, forKey: .pillsTotal)
         try c.encode(pillsRemaining, forKey: .pillsRemaining)
         try c.encode(refillReminder, forKey: .refillReminder)
@@ -105,6 +110,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
             deadlineAt: try required(.deadlineAt),
             daysTaken: try c.decode(Int.self, forKey: .daysTaken),
             missedCount: try c.decode(Int.self, forKey: .missedCount),
+            lateCount: try c.decodeIfPresent(Int.self, forKey: .lateCount) ?? 0,
             pillsTotal: try c.decodeIfPresent(Int.self, forKey: .pillsTotal),
             pillsRemaining: try c.decodeIfPresent(Int.self, forKey: .pillsRemaining),
             refillReminder: try c.decode(RefillReminder.self, forKey: .refillReminder),

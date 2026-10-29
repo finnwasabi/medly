@@ -35,7 +35,7 @@ import Testing
             checkSoundGaps(events, maxInterval: settings.maxInterval, firstBy: deadline)
 
             // Trường hợp 2: đã quá hạn, chuỗi sau các lần hụt vẫn giữ bất biến.
-            let later = deadline.addingTimeInterval(TimeInterval.random(in: 1...(72 * hour), using: &rng).rounded())
+            let later = deadline.addingTimeInterval(settings.lateWindow + TimeInterval.random(in: 1...(72 * hour), using: &rng).rounded())
             #expect(planner.missedCount(now: later) >= 1)
             checkSoundGaps(planner.events(now: later), maxInterval: settings.maxInterval, firstBy: later.addingTimeInterval(settings.maxInterval))
             checked += 1
@@ -53,8 +53,9 @@ import Testing
             #expect(b.timeIntervalSince(a) <= maxInterval)
         }
         for event in events {
-            #expect(event.date >= event.dueAt && event.date <= event.deadlineAt)
-            #expect(event.requiresSound == (event.kind == .deadline))
+            #expect(event.date >= event.dueAt)
+            #expect(event.date <= event.deadlineAt || event.kind == .overdue)
+            #expect(event.requiresSound == (event.kind == .deadline || event.kind == .overdue))
         }
     }
 }

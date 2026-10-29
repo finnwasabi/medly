@@ -53,6 +53,7 @@ import Testing
       "deadlineAt": "2026-10-28T14:03:00Z",
       "daysTaken": 12,
       "missedCount": 1,
+      "lateCount": 0,
       "pillsTotal": 28,
       "pillsRemaining": 16,
       "refillReminder": { "enabled": true, "daysBefore": 7 },
@@ -92,7 +93,7 @@ import Testing
         }
         #expect(json["pausedUntil"] as? String == "2026-10-29T01:00:00Z")
         #expect(json["updatedAt"] as? String == "2026-10-27T01:00:00Z")
-        #expect(json.count == 11)
+        #expect(json.count == 12)
 
         let decoded = try Snapshot.decode(from: data)
         #expect(decoded == snapshot)

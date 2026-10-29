@@ -1,9 +1,6 @@
 import Foundation
 
-// Dữ liệu giả cho P2 (mockup). P4b thay bằng dữ liệu thật từ NersCore.
-enum MockTodayState: String {
-    case upcoming, taken, overdue
-}
+// Dữ liệu giả cho các phần chưa nối (lịch sử, tuần, lời nhắn). P5 và P7 thay bằng dữ liệu thật.
 
 struct MockDay: Identifiable {
     let id = UUID()
