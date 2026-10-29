@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-29
+
 ### Fixed
 - A late dose taken more than 12 hours after its main time now shows on the day of the dose it was late for, in the week strip and the calendar.
 - Changing the main time no longer unlinks earlier make-ups, so a made-up miss does not come back as "not made up".
@@ -73,7 +75,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/ners-daily/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/finnwasabi/ners-daily/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/finnwasabi/ners-daily/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/finnwasabi/ners-daily/compare/v0.1.3...v0.1.6
 [0.1.5]: https://github.com/finnwasabi/ners-daily/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/finnwasabi/ners-daily/compare/v0.1.3...v0.1.4
