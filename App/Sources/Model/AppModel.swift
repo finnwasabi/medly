@@ -3,6 +3,7 @@ import Foundation
 import Network
 import NersCore
 import Observation
+import SwiftUI
 
 /// App state: loads and saves data and reschedules reminders after every change.
 /// Shared by the screens, the alarm App Intent and the notification action.
@@ -61,6 +62,11 @@ final class AppModel {
         return name.isEmpty ? L("người ấy", "your partner") : name
     }
 
+    /// Light, dark, or following the phone.
+    var theme: AppTheme = AppTheme(rawValue: UserDefaults.standard.string(forKey: "theme") ?? "") ?? .system {
+        didSet { UserDefaults.standard.set(theme.rawValue, forKey: "theme") }
+    }
+
     // MARK: Reminder preferences
 
     /// Follow phone: reminders are plain notifications that respect the phone's mode, but the deadline is still a ringing alarm.
@@ -75,7 +81,12 @@ final class AppModel {
     static let snoozeRange = 1...15
     var snoozeMinutes: Int = UserDefaults.standard.object(forKey: "snoozeMinutes") as? Int ?? 9 {
         didSet {
-            snoozeMinutes = min(max(snoozeMinutes, Self.snoozeRange.lowerBound), Self.snoozeRange.upperBound)
+            // Assign only when out of range: with @Observable, assigning inside didSet runs didSet again, and an
+            // unconditional clamp here recursed forever (0.2.0 crashed on the first tap of the snooze stepper).
+            guard Self.snoozeRange.contains(snoozeMinutes) else {
+                snoozeMinutes = min(max(snoozeMinutes, Self.snoozeRange.lowerBound), Self.snoozeRange.upperBound)
+                return
+            }
             guard snoozeMinutes != oldValue else { return }
             UserDefaults.standard.set(snoozeMinutes, forKey: "snoozeMinutes")
             Task { await resync() }
@@ -197,11 +208,12 @@ final class AppModel {
     }
 
     /// Every change to one medication's settings, pills, pauses or taken times goes through here: save, then reschedule.
-    func update(_ id: UUID, _ change: (inout Medication) -> Void) {
+    /// `stopsAlarms`: also stop this medication's ringing or snoozed alarm, for example when pausing it.
+    func update(_ id: UUID, stopsAlarms: Bool = false, _ change: (inout Medication) -> Void) {
         guard let i = medications.firstIndex(where: { $0.id == id }) else { return }
         change(&medications[i])
         persist()
-        Task { await resync() }
+        Task { await resync(cancelActiveFor: stopsAlarms ? [id] : []) }
     }
 
     func add(_ medication: Medication) {
@@ -266,5 +278,17 @@ final class AppModel {
         } while syncAgain
         syncing = false
         await sync()
+    }
+}
+
+enum AppTheme: String {
+    case system, light, dark
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
     }
 }

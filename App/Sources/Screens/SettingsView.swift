@@ -9,7 +9,7 @@ struct SettingsView: View {
 
     var body: some View {
         @Bindable var model = model
-        NavigationStack {
+        Group {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Text(L("Cài đặt", "Settings"))
@@ -35,7 +35,7 @@ struct SettingsView: View {
                             NeoSegmented(options: [(false, L("Luôn kêu", "Always ring")), (true, L("Theo chế độ máy", "Follow phone"))], selection: $model.vibrateOnly)
                             InkDivider()
                             NeoRow(title: L("Hoãn", "Snooze"), detail: L("mặc định 9 phút như Đồng hồ iPhone", "9 min by default, like the iPhone Clock")) {
-                                NeoStepper(label: L("\(model.snoozeMinutes) phút", "\(model.snoozeMinutes) min"), value: $model.snoozeMinutes, range: AppModel.snoozeRange)
+                                NeoStepper(value: $model.snoozeMinutes, range: AppModel.snoozeRange, unit: L("phút", "min"))
                             }
                             Callout(text: L("Hoãn bao nhiêu lần cũng được, nhưng chỉ bấm Đã uống mới tắt hẳn. Chưa uống thì app nhắc lại 3 lần mỗi 5 phút, rồi mỗi giờ, rồi dồn dập trước hạn chót.",
                                             "Snooze as often as you like, but only Taken stops it for good. Until then the app repeats 3 times every 5 minutes, then hourly, then faster before the deadline."),
@@ -49,6 +49,10 @@ struct SettingsView: View {
 
                     section(L("Ứng dụng", "App")) {
                         VStack(alignment: .leading, spacing: 14) {
+                            label(L("Giao diện", "Appearance"))
+                            NeoSegmented(options: [(AppTheme.system, L("Theo máy", "System")), (AppTheme.light, L("Sáng", "Light")), (AppTheme.dark, L("Tối", "Dark"))],
+                                         selection: $model.theme)
+                            InkDivider()
                             label(L("Ngôn ngữ", "Language"))
                             NeoSegmented(options: [(Language.vi, "Tiếng Việt"), (Language.en, "English")], selection: $model.language)
                             InkDivider()
@@ -65,7 +69,6 @@ struct SettingsView: View {
             }
             .background(Palette.background)
             .scrollDismissesKeyboard(.interactively)
-            .toolbar(.hidden, for: .navigationBar)
             .confirmationDialog(L("Gỡ kết nối với \(model.partner)?", "Disconnect from \(model.partner)?"), isPresented: $confirmDisconnect, titleVisibility: .visible) {
                 Button(L("Gỡ kết nối", "Disconnect"), role: .destructive) { model.disconnect() }
             } message: {

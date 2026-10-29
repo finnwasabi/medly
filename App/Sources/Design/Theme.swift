@@ -29,7 +29,10 @@ enum Palette {
 }
 
 enum Neo {
-    static let border: CGFloat = 2.5
+    /// Outline of cards and large controls.
+    static let border: CGFloat = 2.25
+    /// Small elements (chips, pills, cells) read heavier at the same width, so they get a thinner line.
+    static let thinBorder: CGFloat = 2
     static let shadow: CGFloat = 4
     static let radius: CGFloat = 16
 }
@@ -127,7 +130,7 @@ extension View {
     func neo(_ fill: Color = Palette.surface, radius: CGFloat = Neo.radius, shadow: CGFloat = Neo.shadow) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return background(fill, in: shape)
-            .overlay(shape.strokeBorder(Palette.ink, lineWidth: Neo.border))
+            .overlay(shape.strokeBorder(Palette.ink, lineWidth: radius <= 12 ? Neo.thinBorder : Neo.border))
             .background(shape.fill(Palette.ink).offset(x: shadow, y: shadow))
     }
 
@@ -253,10 +256,10 @@ struct NeoToggleStyle: ToggleStyle {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 ZStack(alignment: configuration.isOn ? .trailing : .leading) {
                     Capsule().fill(configuration.isOn ? Palette.mint : Palette.stone)
-                        .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: Neo.border))
+                        .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: Neo.thinBorder))
                         .frame(width: 54, height: 32)
                     Circle().fill(Color.white)
-                        .overlay(Circle().strokeBorder(Palette.ink, lineWidth: Neo.border))
+                        .overlay(Circle().strokeBorder(Palette.ink, lineWidth: Neo.thinBorder))
                         .frame(width: 32, height: 32)
                 }
                 .animation(.snappy(duration: 0.15), value: configuration.isOn)
@@ -287,7 +290,7 @@ struct NeoSegmented<Value: Hashable>: View {
                         .frame(maxWidth: .infinity, minHeight: 40)
                         .background(selected ? Palette.yellow : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .overlay {
-                            if selected { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.ink, lineWidth: 2) }
+                            if selected { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.ink, lineWidth: Neo.thinBorder) }
                         }
                         .contentShape(Rectangle())
                 }
@@ -300,31 +303,62 @@ struct NeoSegmented<Value: Hashable>: View {
     }
 }
 
-/// Minus and plus buttons around a value, in the same style.
+/// Minus and plus buttons around a value, in the same style. Holding a button repeats it; with `editable`, the value
+/// can also be typed.
 struct NeoStepper: View {
-    let label: String
     @Binding var value: Int
     let range: ClosedRange<Int>
+    /// Shown after the value, for example "phút" or "pills".
+    let unit: String
     var step = 1
+    var editable = false
+
+    @State private var text = ""
+    @FocusState private var focused: Bool
 
     var body: some View {
         HStack(spacing: 10) {
             Button { value = max(range.lowerBound, value - step) } label: { Image(systemName: "minus").frame(width: 22) }
                 .buttonStyle(ChipButtonStyle())
+                .buttonRepeatBehavior(.enabled)
                 .disabled(value <= range.lowerBound)
                 .accessibilityHidden(true)
-            Text(label)
-                .font(.body.weight(.heavy).monospacedDigit())
-                .foregroundStyle(Palette.text)
-                .frame(minWidth: 64)
-                .multilineTextAlignment(.center)
+            HStack(spacing: 4) {
+                if editable {
+                    TextField("", text: $text)
+                        .keyboardType(.numberPad)
+                        .focused($focused)
+                        .multilineTextAlignment(.center)
+                        .fixedSize()
+                        .frame(minWidth: 28)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Palette.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .onChange(of: text) { _, typed in
+                            let digits = String(typed.filter(\.isNumber).prefix(String(range.upperBound).count))
+                            if digits != typed { text = digits }
+                            if let number = Int(digits), range.contains(number) { value = number }
+                        }
+                        .onChange(of: focused) { _, isFocused in if !isFocused { text = String(value) } }
+                        .onChange(of: value) { _, number in if !focused || Int(text) != number { text = String(number) } }
+                        .onAppear { text = String(value) }
+                } else {
+                    Text("\(value)")
+                }
+                Text(unit)
+            }
+            .font(.body.weight(.heavy).monospacedDigit())
+            .foregroundStyle(Palette.text)
+            // Wide enough for the longest value, so the plus button does not move while counting.
+            .frame(minWidth: 110)
             Button { value = min(range.upperBound, value + step) } label: { Image(systemName: "plus").frame(width: 22) }
                 .buttonStyle(ChipButtonStyle())
+                .buttonRepeatBehavior(.enabled)
                 .disabled(value >= range.upperBound)
                 .accessibilityHidden(true)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
+        .accessibilityElement(children: editable ? .contain : .ignore)
+        .accessibilityLabel("\(value) \(unit)")
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: value = min(range.upperBound, value + step)
