@@ -4,8 +4,6 @@ import NersCore
 import SwiftUI
 import UserNotifications
 
-nonisolated struct DoseAlarmMetadata: AlarmMetadata {}
-
 /// Đổ danh sách lần báo vào AlarmKit (báo thức có tiếng) và UserNotifications (noti thường).
 /// Mốc luôn là thời điểm tuyệt đối: `.fixed` cho báo thức, khoảng giây tính từ bây giờ cho noti,
 /// nên đổi múi giờ máy không làm lệch.

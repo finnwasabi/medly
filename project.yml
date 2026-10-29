@@ -20,8 +20,10 @@ targets:
     platform: iOS
     dependencies:
       - package: NersCore
+      - target: NersDailyWidget
     sources:
       - App/Sources
+      - App/Shared
       - App/Resources
     info:
       path: App/Info.plist
@@ -31,6 +33,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSSupportsLiveActivities: true
         NSAlarmKitUsageDescription: "Ner's Daily cần đặt báo thức để nhắc bạn uống thuốc đúng giờ, kể cả khi máy đang im lặng."
     settings:
       base:
@@ -38,6 +41,25 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
+  NersDailyWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - App/Widget
+      - App/Shared
+    info:
+      path: App/Widget/Info.plist
+      properties:
+        CFBundleDisplayName: "Ner's Daily"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.finnwasabi.nersdaily.widget
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
 schemes:
   NersDaily:
     build:
