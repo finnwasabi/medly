@@ -102,7 +102,7 @@ import Testing
         planner.markTaken(at: vn(2026, 10, 1, 23))
         let alerts = AlertPlanner.alerts(for: planner.events(now: vn(2026, 10, 1, 23, 1)), vibrateOnly: false,
                                          refillMessage: "còn 5 viên, nhớ mua thêm", missedMessage: line)
-        #expect(alerts.first?.title == "Tới giờ uống thuốc. Còn 1 viên hụt chưa uống bù. Còn 5 viên, nhớ mua thêm")
+        #expect(alerts.first?.title == "Tới giờ uống thuốc. Còn 1 lần hụt chưa uống bù. Còn 5 viên, nhớ mua thêm")
     }
 
     @Test func oldRecordsWithoutMakeUpFieldStillDecode() throws {
@@ -114,7 +114,7 @@ import Testing
     @Test func snapshotReportsMadeUp() {
         var (planner, missed) = plannerWithOneMiss()
         planner.markMadeUp(missedAt: missed.scheduledAt, at: vn(2026, 10, 28, 12))
-        let snapshot = planner.snapshot(now: vn(2026, 10, 28, 13))
+        let snapshot = Medication(name: "", settings: planner.settings, history: planner.history).snapshot(now: vn(2026, 10, 28, 13))
         #expect(snapshot.missedCount == 1)
         #expect(snapshot.madeUpCount == 1)
     }

@@ -3,8 +3,9 @@ import SwiftUI
 
 struct TodayView: View {
     @Environment(AppModel.self) private var model
-    @State private var pillsSheet = false
-    @State private var confirmRealign: ResetPreview?
+    @State private var addingMedication = false
+    @State private var confirmRealign: (id: UUID, preview: ResetPreview)?
+    @State private var tapped = 0
     @Environment(\.dynamicTypeSize) private var typeSize
 
     /// Side by side normally, stacked at accessibility text sizes so nothing overflows the screen.
@@ -19,15 +20,19 @@ struct TodayView: View {
             TimelineView(.everyMinute) { _ in
                 let now = Date.now
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 18) {
                         header(now: now)
-                        if let issue = model.issue { issueBanner(issue) }
+                        if let issue = model.issue { Callout(text: issue, icon: "exclamationmark.octagon.fill") }
                         if let message = model.message { messageCard(message) }
-                        let missed = model.planner.outstandingMissed(now: now)
-                        if !missed.isEmpty { missedCard(missed) }
-                        doseCard(now: now)
-                        if let pills = model.planner.settings.pills { pillsCard(pills) }
-                        weekCard(now: now)
+                        if model.medications.isEmpty {
+                            emptyCard
+                        } else {
+                            let missed = model.medications.flatMap { med in med.planner.outstandingMissed(now: now).map { (med, $0) } }
+                            if !missed.isEmpty { missedCard(missed) }
+                            dueAllButton(now: now)
+                            ForEach(sorted(now: now)) { medication in doseCard(medication, now: now) }
+                            weekCard(now: now)
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
@@ -35,17 +40,30 @@ struct TodayView: View {
             }
             .background(Palette.background)
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $pillsSheet) { PillsSheet() }
+            .sheet(isPresented: $addingMedication) { MedicationEditor(medication: nil) }
+            .sensoryFeedback(.success, trigger: tapped)
+        }
+    }
+
+    /// Due first, then by the next reminder; paused ones last.
+    private func sorted(now: Date) -> [Medication] {
+        model.medications.sorted { a, b in
+            let pa = a.settings.pausedUntil(now: now) != nil, pb = b.settings.pausedUntil(now: now) != nil
+            if pa != pb { return pb }
+            return a.planner.currentDose(now: now).dueAt < b.planner.currentDose(now: now).dueAt
         }
     }
 
     private func header(now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(TodayText.dayTitle(now))
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(Palette.textSecondary)
+                .font(.subheadline.weight(.heavy))
+                .foregroundStyle(Palette.onFill)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .neo(Palette.mint, radius: 8, shadow: 2)
             Text(model.greeting)
-                .font(.largeTitle.bold())
+                .font(.largeTitle.weight(.black))
                 .foregroundStyle(Palette.text)
                 // Long names wrap to two lines and shrink a little rather than push the layout.
                 .lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
@@ -54,61 +72,101 @@ struct TodayView: View {
         .padding(.top, 12)
     }
 
-    private func issueBanner(_ text: String) -> some View {
-        Label(text, systemImage: "exclamationmark.octagon.fill")
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(DoseStatus.missed.foreground)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DoseStatus.missed.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
     private func messageCard(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "heart.fill")
-                .foregroundStyle(Palette.primary)
-                .font(.title3)
+                .font(.title2)
             VStack(alignment: .leading, spacing: 4) {
-                Text(L("Lời nhắn từ \(model.partner)", "Message from \(model.partner)"))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Palette.primary)
+                Text(L("Lời nhắn từ \(model.partner)", "A note from \(model.partner)"))
+                    .font(.footnote.weight(.heavy))
                 Text(message)
-                    .font(.body)
-                    .foregroundStyle(Palette.text)
+                    .font(.body.weight(.semibold))
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.primarySoft, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .foregroundStyle(Palette.onFill)
+        .card(Palette.pink)
+        // A sticky note, slightly crooked.
+        .rotationEffect(.degrees(-1.2))
+        .padding(.vertical, 4)
+    }
+
+    private var emptyCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            IconBadge(icon: "pills.fill", fill: Palette.lavender, size: 64)
+            Text(L("Chưa có thuốc nào", "No medications yet"))
+                .font(.title2.weight(.black))
+            Text(L("Thêm thuốc đầu tiên, đặt giờ nhắc, vậy là xong. Mỗi loại thuốc có giờ và số lần uống riêng.",
+                   "Add your first one and set a time, that's it. Every medication gets its own times and doses."))
+                .font(.body.weight(.medium))
+            Button(L("Thêm thuốc", "Add medication")) { addingMedication = true }
+                .buttonStyle(NeoButtonStyle(fill: Palette.surfaceOnFill))
+        }
+        .foregroundStyle(Palette.onFill)
+        .card(Palette.yellow)
+    }
+
+    /// One tap for every medication due right now.
+    @ViewBuilder
+    private func dueAllButton(now: Date) -> some View {
+        let due = model.medications.filter { $0.settings.pausedUntil(now: now) == nil && now >= $0.planner.currentDose(now: now).dueAt }
+        if due.count > 1 {
+            Button(L("Đã uống cả \(due.count) thuốc", "Took all \(due.count)")) {
+                tapped += 1
+                Task { await model.markTaken(due.map(\.id)) }
+            }
+            .buttonStyle(NeoButtonStyle(fill: Palette.mint))
+        }
     }
 
     @ViewBuilder
-    private func doseCard(now: Date) -> some View {
-        let planner = model.planner
+    private func doseCard(_ medication: Medication, now: Date) -> some View {
+        let planner = medication.planner
         let dose = planner.currentDose(now: now)
         let last = planner.lastTaken(now: now)
-        VStack(alignment: .leading, spacing: 16) {
-            if now >= dose.dueAt {
-                StatusPill(status: .late)
-                timeBlock(title: L("Đã quá giờ uống", "Past pill time by"), time: TodayText.duration(now.timeIntervalSince(dose.dueAt)), showsVN: false,
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                IconBadge(icon: medication.icon, fill: Palette.surfaceOnFill, size: 42)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(medication.name)
+                        .font(.title3.weight(.black))
+                        .lineLimit(3)
+                    Text(medication.scheduleSummary)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Palette.onFillSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let until = medication.settings.pausedUntil(now: now) {
+                StatusPill(status: .paused)
+                Text(L("Tạm dừng nhắc tới \(TodayText.relativeDay(until, from: now)) \(TimeFormatting.vn(until)).", "Reminders paused until \(TodayText.relativeDay(until, from: now)) \(TimeFormatting.vn(until))."))
+                    .font(.callout.weight(.semibold))
+                Button(L("Nhắc lại ngay", "Resume now")) { model.update(medication.id) { $0.planner.resume(now: .now) } }
+                    .buttonStyle(ChipButtonStyle(fill: Palette.surfaceOnFill))
+            } else if now >= dose.dueAt {
+                StatusPill(status: now < dose.deadlineAt ? .due : .late)
+                timeBlock(title: L("Đã quá giờ uống", "Past dose time by"), time: TodayText.duration(now.timeIntervalSince(dose.dueAt)), showsVN: false,
                           local: L("giờ uống \(TodayText.relativeDay(dose.dueAt, from: now)) \(TimeFormatting.vn(dose.dueAt))",
-                                   "pill time \(TodayText.relativeDay(dose.dueAt, from: now)) \(TimeFormatting.vn(dose.dueAt))"))
-                warning(now < dose.deadlineAt
-                    ? L("Còn \(TodayText.duration(dose.deadlineAt.timeIntervalSince(now))) tới hạn chót 24 giờ", "\(TodayText.duration(dose.deadlineAt.timeIntervalSince(now))) left until the 24-hour deadline")
-                    : L("Đã quá hạn chót \(TodayText.duration(now.timeIntervalSince(dose.deadlineAt))). Xem tờ hướng dẫn thuốc hoặc hỏi bác sĩ, dược sĩ.", "Past the deadline by \(TodayText.duration(now.timeIntervalSince(dose.deadlineAt))). Check the leaflet or ask a doctor or pharmacist."))
-                takeButton
-            } else if let last, let takenAt = last.takenAt, TodayText.isRecent(takenAt, now: now, undoWindow: planner.settings.undoWindow) {
+                                   "dose time \(TodayText.relativeDay(dose.dueAt, from: now)) \(TimeFormatting.vn(dose.dueAt))"))
+                Callout(text: now < dose.deadlineAt
+                    ? L("Còn \(TodayText.duration(dose.deadlineAt.timeIntervalSince(now))) tới hạn chót", "\(TodayText.duration(dose.deadlineAt.timeIntervalSince(now))) left until the deadline")
+                    : L("Đã quá hạn chót \(TodayText.duration(now.timeIntervalSince(dose.deadlineAt))). Xem tờ hướng dẫn thuốc hoặc hỏi bác sĩ, dược sĩ.", "Past the deadline by \(TodayText.duration(now.timeIntervalSince(dose.deadlineAt))). Check the leaflet or ask a doctor or pharmacist."),
+                    icon: "exclamationmark.triangle.fill", fill: now < dose.deadlineAt ? Palette.surfaceOnFill : Palette.coral)
+                takeButton(medication)
+            } else if let last, let takenAt = last.takenAt, TodayText.isRecent(takenAt, now: now, settings: medication.settings) {
                 StatusPill(status: .taken)
                 timeBlock(title: L("Đã uống lúc", "Taken at"), time: TimeFormatting.clockTime(takenAt, in: VietnamClock.timeZone), showsVN: true,
                           local: TodayText.localLine(takenAt))
                 Text(L("Lần sau: \(TodayText.relativeDay(dose.dueAt, from: now)) \(TimeFormatting.vn(dose.dueAt)), hạn chót \(TimeFormatting.clockTime(dose.deadlineAt, in: VietnamClock.timeZone)).", "Next: \(TodayText.relativeDay(dose.dueAt, from: now)) \(TimeFormatting.vn(dose.dueAt)), deadline \(TimeFormatting.clockTime(dose.deadlineAt, in: VietnamClock.timeZone))."))
-                    .font(.callout)
-                    .foregroundStyle(Palette.textSecondary)
-                realignButton(dose: dose, now: now)
-                let undoLeft = planner.settings.undoWindow - now.timeIntervalSince(takenAt)
-                if undoLeft > 0 {
-                    Button(L("Hoàn tác (còn \(TodayText.duration(undoLeft)))", "Undo (\(TodayText.duration(undoLeft)) left)")) { Task { await model.undo() } }
-                        .buttonStyle(SecondaryButtonStyle())
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Palette.onFillSecondary)
+                HStack(spacing: 10) {
+                    let undoLeft = medication.settings.undoWindow - now.timeIntervalSince(takenAt)
+                    if undoLeft > 0 {
+                        Button(L("Hoàn tác (\(TodayText.duration(undoLeft)))", "Undo (\(TodayText.duration(undoLeft)))")) { Task { await model.undo(medication.id) } }
+                            .buttonStyle(ChipButtonStyle(fill: Palette.surfaceOnFill))
+                    }
+                    realignButton(medication, dose: dose, now: now)
                 }
             } else {
                 StatusPill(status: .upcoming)
@@ -117,174 +175,167 @@ struct TodayView: View {
                           time: TimeFormatting.clockTime(dose.dueAt, in: VietnamClock.timeZone), showsVN: true,
                           local: TodayText.localLine(dose.dueAt))
                 Text(L("Còn \(TodayText.duration(dose.dueAt.timeIntervalSince(now)))", "In \(TodayText.duration(dose.dueAt.timeIntervalSince(now)))"))
-                    .font(.headline)
-                    .foregroundStyle(Palette.textSecondary)
-                realignButton(dose: dose, now: now)
-                takeButton
+                    .font(.headline.weight(.heavy))
+                    .foregroundStyle(Palette.onFillSecondary)
+                realignButton(medication, dose: dose, now: now)
+                takeButton(medication)
                 Text(L("Uống sớm cũng được, lần sau sẽ nhắc sớm theo.", "Taking it early is fine, the next reminder moves earlier too."))
-                    .font(.footnote)
-                    .foregroundStyle(Palette.textSecondary)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Palette.onFillSecondary)
+            }
+            if let pills = medication.settings.pills { pillsRow(pills, refill: medication.settings.refillReminder) }
+        }
+        .foregroundStyle(Palette.onFill)
+        .card(Swatch.color(medication.color))
+    }
+
+    private func takeButton(_ medication: Medication) -> some View {
+        Button(L("Đã uống", "Taken")) {
+            tapped += 1
+            Task { await model.markTaken([medication.id]) }
+        }
+        .buttonStyle(NeoButtonStyle(fill: Palette.surfaceOnFill))
+        .accessibilityLabel(L("Đã uống \(medication.name)", "Taken \(medication.name)"))
+    }
+
+    private func pillsRow(_ pills: PillCounter, refill: RefillReminder) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(L("Còn \(pills.remaining)/\(pills.total) viên", "\(pills.remaining)/\(pills.total) pills left"), systemImage: "pills")
+                    .font(.subheadline.weight(.heavy))
+                Spacer()
+            }
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Palette.surfaceOnFill)
+                    Capsule().fill(Palette.onFill)
+                        .frame(width: proxy.size.width * CGFloat(pills.remaining) / CGFloat(max(1, pills.total)))
+                }
+                .overlay(Capsule().strokeBorder(Palette.onFill, lineWidth: 2))
+            }
+            .frame(height: 12)
+            .accessibilityHidden(true)
+            if let line = pills.refillMessage(refill, language: AppLanguage.current) {
+                Callout(text: line.prefix(1).uppercased() + line.dropFirst(), icon: "cart.fill", fill: Palette.surfaceOnFill)
             }
         }
-        .card()
     }
 
     /// Missed doses from the last 7 days that are not made up. The app gives no advice on making up, it only points to the leaflet.
-    private func missedCard(_ records: [DoseRecord]) -> some View {
+    private func missedCard(_ items: [(medication: Medication, record: DoseRecord)]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             StatusPill(status: .missed)
-            Text(records.count == 1 ? L("Có 1 lần hụt chưa uống bù", "1 missed dose not made up") : L("Có \(records.count) lần hụt chưa uống bù", "\(records.count) missed doses not made up"))
-                .font(.headline)
+            Text(items.count == 1 ? L("Có 1 lần hụt chưa uống bù", "1 missed dose not made up") : L("Có \(items.count) lần hụt chưa uống bù", "\(items.count) missed doses not made up"))
+                .font(.headline.weight(.black))
                 .foregroundStyle(Palette.text)
-            ForEach(records) { record in
+            ForEach(items, id: \.record.id) { medication, record in
                 rowLayout {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(TodayText.dayTitle(record.scheduledAt))
-                            .font(.body.weight(.medium))
+                        Text(medication.name)
+                            .font(.body.weight(.heavy))
                             .foregroundStyle(Palette.text)
-                        Text(L("giờ uống \(TimeFormatting.vn(record.scheduledAt))", "pill time \(TimeFormatting.vn(record.scheduledAt))"))
-                            .font(.footnote)
+                        Text("\(TodayText.dayTitle(record.scheduledAt)), \(TimeFormatting.vn(record.scheduledAt))")
+                            .font(.footnote.weight(.medium))
                             .foregroundStyle(Palette.textSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    Button(L("Đã uống bù", "Mark made up")) { model.markMadeUp(missedAt: record.scheduledAt) }
-                        .buttonStyle(.bordered)
-                        .tint(DoseStatus.madeUp.foreground)
+                    Button(L("Đã uống bù", "Mark made up")) { model.markMadeUp(medication.id, missedAt: record.scheduledAt) }
+                        .buttonStyle(ChipButtonStyle(fill: Palette.sky))
                 }
             }
-            Text(L("Có nên uống bù hay không, uống thế nào: xem tờ hướng dẫn thuốc hoặc hỏi bác sĩ, dược sĩ. Bấm nhầm thì xoá trong Lịch sử.", "Whether and how to make up a missed pill: check the leaflet or ask a doctor or pharmacist. Tapped by mistake? Delete it in History."))
-                .font(.footnote)
+            Text(L("Có nên uống bù hay không, uống thế nào: xem tờ hướng dẫn thuốc hoặc hỏi bác sĩ, dược sĩ. Bấm nhầm thì xoá trong Lịch sử.", "Whether and how to make up a missed dose: check the leaflet or ask a doctor or pharmacist. Tapped by mistake? Delete it in History."))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(Palette.textSecondary)
         }
         .card()
     }
 
-    /// Shown when an early dose pulled the next reminder before the main time.
+    /// Shown when an early dose pulled the next reminder before its scheduled time.
     @ViewBuilder
-    private func realignButton(dose: Dose, now: Date) -> some View {
-        if dose.dueAt < dose.slotAt.addingTimeInterval(-60), let preview = model.planner.resetPreview(now: now) {
+    private func realignButton(_ medication: Medication, dose: Dose, now: Date) -> some View {
+        if dose.dueAt < dose.slotAt.addingTimeInterval(-60), let preview = medication.planner.resetPreview(now: now) {
             let main = TimeFormatting.clockTime(preview.dueAt, in: VietnamClock.timeZone)
-            Button(L("Về lại giờ chính \(main)", "Back to the main time \(main)")) { confirmRealign = preview }
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(Palette.primary)
-                .alert(L("Về lại giờ chính?", "Back to the main time?"),
-                       isPresented: Binding(get: { confirmRealign != nil }, set: { if !$0 { confirmRealign = nil } })) {
+            Button(L("Về lại \(main)", "Back to \(main)")) { confirmRealign = (medication.id, preview) }
+                .buttonStyle(ChipButtonStyle(fill: Palette.surfaceOnFill))
+                .alert(L("Về lại giờ chính?", "Back to the usual time?"),
+                       isPresented: Binding(get: { confirmRealign?.id == medication.id }, set: { if !$0 { confirmRealign = nil } })) {
                     Button(L("Về lại \(main)", "Move to \(main)"), role: preview.exceedsMaxInterval ? .destructive : nil) {
-                        model.update { _ = $0.resetToMainTime(now: .now) }
+                        model.update(medication.id) { $0.planner.resetToMainTime(now: .now) }
                         confirmRealign = nil
                     }
                     Button(L("Giữ như cũ", "Keep it"), role: .cancel) { confirmRealign = nil }
                 } message: {
                     Text(preview.exceedsMaxInterval
-                         ? L("Lần tới sẽ cách lần trước quá 24 giờ. Xem tờ hướng dẫn thuốc trước khi giãn khoảng cách.",
-                             "The next dose will be more than 24 hours after the last one. Check the leaflet before stretching the gap.")
+                         ? L("Lần tới sẽ cách lần trước quá \(TodayText.duration(medication.settings.maxInterval)). Xem tờ hướng dẫn thuốc trước khi giãn khoảng cách.",
+                             "The next dose will be more than \(TodayText.duration(medication.settings.maxInterval)) after the last one. Check the leaflet before stretching the gap.")
                          : L("Lần tới sẽ về lại \(main) giờ VN.", "The next dose moves back to \(main) VN time."))
                 }
         }
     }
 
-    private var takeButton: some View {
-        Button(L("Đã uống", "Taken")) { Task { await model.markTaken() } }
-            .buttonStyle(PrimaryButtonStyle())
-    }
-
-    private func warning(_ text: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-            Text(text)
-        }
-        .font(.callout.weight(.semibold))
-        .foregroundStyle(DoseStatus.missed.foreground)
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DoseStatus.missed.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
     private func timeBlock(title: String, time: String, showsVN: Bool, local: String?) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(title)
-                .font(.callout)
-                .foregroundStyle(Palette.textSecondary)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(Palette.onFillSecondary)
             (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
                                           : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))) {
                 Text(time)
-                    .font(.system(size: 48, weight: .bold))
-                    .foregroundStyle(Palette.text)
+                    .font(.system(size: 50, weight: .black))
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
                 if showsVN {
                     Text(L("giờ VN", "VN time"))
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(Palette.textSecondary)
+                        .font(.title3.weight(.heavy))
+                        .foregroundStyle(Palette.onFillSecondary)
                 }
             }
             if let local {
                 Text(local)
-                    .font(.callout)
-                    .foregroundStyle(Palette.textSecondary)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Palette.onFillSecondary)
             }
         }
-    }
-
-    private func pillsCard(_ pills: PillCounter) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label(L("Số viên", "Pills"), systemImage: "pills.fill")
-                    .font(.headline)
-                    .foregroundStyle(Palette.text)
-                Spacer()
-                Text(L("\(pills.remaining)/\(pills.total) viên", "\(pills.remaining)/\(pills.total) pills"))
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(Palette.text)
-            }
-            ProgressView(value: Double(pills.remaining), total: Double(max(1, pills.total)))
-                .tint(Palette.primary)
-            if let refill = pills.refillMessage(model.planner.settings.refillReminder, language: AppLanguage.current) {
-                HStack(spacing: 8) {
-                    Image(systemName: "cart.fill")
-                    Text(refill.prefix(1).uppercased() + refill.dropFirst())
-                }
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(DoseStatus.late.foreground)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(DoseStatus.late.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            Button(L("Thêm viên", "Add pills")) { pillsSheet = true }
-                .buttonStyle(SecondaryButtonStyle())
-        }
-        .card()
     }
 
     private func weekCard(now: Date) -> some View {
         let calendar = VietnamClock.calendar
         let today = calendar.startOfDay(for: now)
-        let statuses = model.planner.dayStatuses(now: now)
-        // The only past day that can lack a record is the pending dose while it is overdue (still in its late
+        let statuses = mergedDayStatuses(model.medications.map { $0.planner.dayStatuses(now: now) })
+        // The only past day that can lack a record is a pending dose that is due or overdue (still in its late
         // window). Any other gap is before the user started, so it shows "no data", not late.
-        let dose = model.planner.currentDose(now: now)
-        let overdueDay = now >= dose.dueAt ? calendar.startOfDay(for: dose.slotAt) : nil
+        var dueDays: [Date: DoseStatus] = [:]
+        for medication in model.medications {
+            let dose = medication.planner.currentDose(now: now)
+            guard now >= dose.dueAt, medication.settings.pausedUntil(now: now) == nil else { continue }
+            let day = calendar.startOfDay(for: dose.slotAt)
+            if now >= dose.deadlineAt || dueDays[day] == nil { dueDays[day] = now >= dose.deadlineAt ? .late : .due }
+        }
         let days: [(name: String, status: DoseStatus)] = (0..<7).reversed().map { back in
             let day = calendar.date(byAdding: .day, value: -back, to: today)!
             let name = TodayText.shortWeekday(calendar.component(.weekday, from: day))
             if let status = statuses[day] { return (name, DoseStatus(status)) }
-            if day == overdueDay { return (name, .late) }
+            if let status = dueDays[day] { return (name, status) }
             return (name, day < today ? .noData : .upcoming)
         }
         return VStack(alignment: .leading, spacing: 12) {
             Text(L("7 ngày qua", "Last 7 days"))
-                .font(.headline)
+                .font(.headline.weight(.black))
                 .foregroundStyle(Palette.text)
-            HStack(spacing: 0) {
+            HStack(spacing: 6) {
                 ForEach(days, id: \.name) { day, status in
                     VStack(spacing: 6) {
                         Image(systemName: status.icon)
-                            .font(.title2)
-                            .foregroundStyle(status.foreground)
-                            .accessibilityLabel(status.label)
+                            .font(.system(size: 15, weight: .black))
+                            .foregroundStyle(Palette.onFill)
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .neo(status.fill, radius: 10, shadow: 2)
+                            .accessibilityLabel("\(day), \(status.label)")
                         Text(day)
-                            .font(.caption.weight(.medium))
+                            .font(.caption.weight(.heavy))
                             .foregroundStyle(Palette.textSecondary)
+                            .accessibilityHidden(true)
                     }
-                    .frame(maxWidth: .infinity)
                 }
             }
             // Seven columns cannot grow forever; the rest of the screen still scales fully.
@@ -294,7 +345,29 @@ struct TodayView: View {
     }
 }
 
-/// Display texts. Days and main times always follow Vietnam time.
+extension Palette {
+    /// A light fill for buttons and chips that sit on a pastel card, in both modes.
+    static let surfaceOnFill = Color(hex: 0xFFFDF8)
+    static let onFillSecondary = Color(hex: 0x161616).opacity(0.72)
+}
+
+extension Medication {
+    /// "Mỗi ngày lúc 21:00" or "2 lần/ngày, 08:00 · 20:00".
+    var scheduleSummary: String {
+        let times = doseTimes.joined(separator: " · ")
+        return settings.dosesPerDay == 1 ? L("Mỗi ngày lúc \(times)", "Daily at \(times)") : L("\(settings.dosesPerDay) lần/ngày, \(times)", "\(settings.dosesPerDay)× a day, \(times)")
+    }
+
+    /// The clock times of the doses, Vietnam time, earliest in the day first.
+    var doseTimes: [String] {
+        let first = settings.mainHour * 60 + settings.mainMinute
+        let step = 24 * 60 / settings.dosesPerDay
+        return (0..<settings.dosesPerDay).map { (first + $0 * step) % (24 * 60) }.sorted()
+            .map { String(format: "%02d:%02d", $0 / 60, $0 % 60) }
+    }
+}
+
+/// Display texts. Days and dose times always follow Vietnam time.
 enum TodayText {
     private static let weekdaysVI = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"]
     private static let weekdaysEN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -348,9 +421,12 @@ enum TodayText {
         return L("tức \(time) tại \(place)", "that is \(time) in \(place)")
     }
 
-    /// Keep showing "Taken": same Vietnam day, or still within the undo window.
-    static func isRecent(_ takenAt: Date, now: Date, undoWindow: TimeInterval) -> Bool {
-        VietnamClock.calendar.isDate(takenAt, inSameDayAs: now) || now.timeIntervalSince(takenAt) <= undoWindow
+    /// Keep showing "Taken" for half the time to the next dose, or while it can still be undone. A daily dose also
+    /// stays "Taken" for the rest of its Vietnam day, so a morning dose is not offered again in the evening.
+    static func isRecent(_ takenAt: Date, now: Date, settings: ReminderSettings) -> Bool {
+        let elapsed = now.timeIntervalSince(takenAt)
+        if elapsed < settings.period / 2 || elapsed <= settings.undoWindow { return true }
+        return settings.dosesPerDay == 1 && VietnamClock.calendar.isDate(takenAt, inSameDayAs: now)
     }
 }
 

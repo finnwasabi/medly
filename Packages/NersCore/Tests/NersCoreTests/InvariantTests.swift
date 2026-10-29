@@ -8,16 +8,17 @@ import Testing
     /// are never further apart than the maximum gap.
     @Test func soundAlarmNeverMissingBeforeDeadline() {
         var rng = SeededGenerator(seed: 20_261_027)
-        let maxIntervals: [TimeInterval] = [18 * hour, 24 * hour, 26 * hour, 30 * hour, 36 * hour]
+        let factors: [TimeInterval] = [0.75, 1, 26.0 / 24, 1.25, 1.5]
         var checked = 0
 
         for _ in 0..<600 {
-            let settings = ReminderSettings(
+            var settings = ReminderSettings(
                 mainHour: Int.random(in: 0...23, using: &rng),
                 mainMinute: Int.random(in: 0...59, using: &rng),
-                maxInterval: maxIntervals.randomElement(using: &rng)!,
+                dosesPerDay: ReminderSettings.allowedDosesPerDay.randomElement(using: &rng)!,
                 repeatCount: Int.random(in: 0...4, using: &rng)
             )
+            settings.maxInterval = (settings.period * factors.randomElement(using: &rng)!).rounded()
             var planner = Planner(settings: settings)
             var t = vn(2026, 1, 1, 0).addingTimeInterval(TimeInterval.random(in: 0...(365 * 24 * hour), using: &rng))
             for _ in 0..<Int.random(in: 1...10, using: &rng) {
@@ -35,7 +36,7 @@ import Testing
             checkSoundGaps(events, maxInterval: settings.maxInterval, firstBy: deadline)
 
             // Case 2: past the late window; the chain after misses keeps the invariant.
-            let later = deadline.addingTimeInterval(settings.lateWindow + TimeInterval.random(in: 1...(72 * hour), using: &rng).rounded())
+            let later = deadline.addingTimeInterval(min(settings.lateWindow, settings.period / 2) + TimeInterval.random(in: 1...(72 * hour), using: &rng).rounded())
             #expect(planner.missedCount(now: later) >= 1)
             checkSoundGaps(planner.events(now: later), maxInterval: settings.maxInterval, firstBy: later.addingTimeInterval(settings.maxInterval))
             checked += 1

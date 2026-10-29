@@ -37,6 +37,12 @@ public struct ResetPreview: Equatable, Sendable {
     public var deadlineAt: Date
     /// True when that dose would be further than the maximum gap from the previous one; the app must warn.
     public var exceedsMaxInterval: Bool
+
+    public init(dueAt: Date, deadlineAt: Date, exceedsMaxInterval: Bool) {
+        self.dueAt = dueAt
+        self.deadlineAt = deadlineAt
+        self.exceedsMaxInterval = exceedsMaxInterval
+    }
 }
 
 /// Computes the schedule from settings and history. Never reads the clock; `now` is always a parameter.
@@ -63,7 +69,8 @@ public struct Planner: Sendable {
     /// Doses taken after the deadline but within the late window.
     public func lateCount(now: Date) -> Int { walk(now: now).late }
 
-    /// Doses taken since pills were last entered or added, or since the start when not counting.
+    /// Doses taken since pills were last entered or added, or since the start when not counting. With one dose a day
+    /// this is the number of days.
     public func daysTaken(now: Date) -> Int {
         let since = settings.pills?.countingSince ?? .distantPast
         return takes(upTo: now).filter { $0.takenAt! >= since }.count
@@ -90,12 +97,12 @@ public struct Planner: Sendable {
         var unused = history.filter { $0.status == .madeUp && ($0.takenAt ?? .distantFuture) <= now }
         var matched = 0
         for i in records.indices where records[i].status == .missed {
-            // The nearest make-up within 12 h, not an exact match: changing the main time recomputes the reminder time
-            // of past misses, and the make-up must stay linked to its miss.
+            // The nearest make-up within half a period, not an exact match: changing the main time recomputes the
+            // reminder time of past misses, and the make-up must stay linked to its miss.
             let missedAt = records[i].scheduledAt
             let distance = { (record: DoseRecord) in record.makesUpFor.map { abs($0.timeIntervalSince(missedAt)) } ?? .infinity }
             guard let k = unused.indices.min(by: { distance(unused[$0]) < distance(unused[$1]) }),
-                  distance(unused[k]) < 12 * 3600 else { continue }
+                  distance(unused[k]) < halfPeriod else { continue }
             records[i] = unused.remove(at: k)
             records[i].scheduledAt = missedAt
             matched += 1
@@ -108,24 +115,15 @@ public struct Planner: Sendable {
     /// Status of each past Vietnam day (keyed by the start of the day), for the calendar and the week strip.
     /// A day with several records takes the worst status: missed, made up, late, taken, paused.
     public func dayStatuses(now: Date) -> [Date: DoseStatus] {
-        func rank(_ status: DoseStatus) -> Int {
-            switch status {
-            case .missed: 4
-            case .madeUp: 3
-            case .late: 2
-            case .taken: 1
-            case .paused: 0
-            }
-        }
         var result: [Date: DoseStatus] = [:]
         for record in timeline(now: now) {
             // Each record belongs to its nearest main time, the same rule that picks the next dose after a take.
             // A make-up belongs to the day of the miss it covers and a late dose to the day of the dose it was late for,
             // not the day they were taken.
             let moment = record.status == .madeUp || record.status == .late ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
-            let slot = VietnamClock.firstMainTime(after: moment.addingTimeInterval(-12 * 3600), hour: settings.mainHour, minute: settings.mainMinute)
+            let slot = firstSlot(after: moment.addingTimeInterval(-halfPeriod))
             let day = VietnamClock.calendar.startOfDay(for: slot)
-            if let existing = result[day], rank(existing) >= rank(record.status) { continue }
+            if let existing = result[day], existing.severity >= record.status.severity { continue }
             result[day] = record.status
         }
         return result
@@ -225,8 +223,18 @@ public struct Planner: Sendable {
     /// Changes the main time and realigns the pending dose to it. Without this, the 24 h rule would keep reminding at
     /// the old time forever. Use `previewMainTimeChange` first to warn when the next dose would exceed the maximum gap.
     public mutating func changeMainTime(hour: Int, minute: Int, now: Date) {
+        changeSchedule(hour: hour, minute: minute, dosesPerDay: settings.dosesPerDay, now: now)
+    }
+
+    /// Changes the main time and the doses per day, and realigns the pending dose. A new number of doses per day also
+    /// moves the maximum gap into the new allowed range.
+    public mutating func changeSchedule(hour: Int, minute: Int, dosesPerDay: Int, now: Date) {
         settings.mainHour = hour
         settings.mainMinute = minute
+        if dosesPerDay != settings.dosesPerDay, ReminderSettings.allowedDosesPerDay.contains(dosesPerDay) {
+            settings.dosesPerDay = dosesPerDay
+            settings.maxInterval = settings.period
+        }
         guard walk(now: now).followsTake, let last = takes(upTo: now).last,
               let index = history.firstIndex(where: { $0.id == last.id }) else { return }
         history[index].nextAtMainTime = true
@@ -234,8 +242,13 @@ public struct Planner: Sendable {
 
     /// What the pending dose would become after `changeMainTime`.
     public func previewMainTimeChange(hour: Int, minute: Int, now: Date) -> ResetPreview {
+        previewScheduleChange(hour: hour, minute: minute, dosesPerDay: settings.dosesPerDay, now: now)
+    }
+
+    /// What the pending dose would become after `changeSchedule`.
+    public func previewScheduleChange(hour: Int, minute: Int, dosesPerDay: Int, now: Date) -> ResetPreview {
         var copy = self
-        copy.changeMainTime(hour: hour, minute: minute, now: now)
+        copy.changeSchedule(hour: hour, minute: minute, dosesPerDay: dosesPerDay, now: now)
         let dose = copy.currentDose(now: now)
         return ResetPreview(dueAt: dose.dueAt, deadlineAt: dose.deadlineAt, exceedsMaxInterval: dose.exceedsMaxInterval)
     }
@@ -284,7 +297,7 @@ public struct Planner: Sendable {
         let taken = takes(upTo: now)
         guard let first = taken.first else {
             // No history yet: the first dose is the next main time after `now`.
-            var state = WalkState(dose: doseFromMainTime(VietnamClock.firstMainTime(after: now, hour: settings.mainHour, minute: settings.mainMinute)))
+            var state = WalkState(dose: doseFromMainTime(firstSlot(after: now)))
             advance(&state, before: now)
             return state
         }
@@ -330,7 +343,24 @@ public struct Planner: Sendable {
     }
 
     private var maxInterval: TimeInterval { max(60, settings.maxInterval) }
-    private var lateWindow: TimeInterval { max(0, settings.lateWindow) }
+    private var period: TimeInterval { settings.period }
+    private var halfPeriod: TimeInterval { settings.period / 2 }
+    /// Never longer than half a period, so with several doses a day a dose turns missed before the one after next is due.
+    private var lateWindow: TimeInterval { min(max(0, settings.lateWindow), halfPeriod) }
+    private var overdueBurst: TimeInterval { min(max(0, settings.overdueBurst), lateWindow) }
+
+    /// The first scheduled dose time strictly after `date`. Doses repeat every `period` from the main time; 24 h is a
+    /// multiple of the period and Vietnam has no daylight saving, so this is plain arithmetic.
+    func firstSlot(after date: Date) -> Date {
+        let base = VietnamClock.mainTime(onDayOf: date, hour: settings.mainHour, minute: settings.mainMinute)
+        return base.addingTimeInterval((floor(date.timeIntervalSince(base) / period) + 1) * period)
+    }
+
+    /// The first scheduled dose time at or after `date`.
+    func firstSlot(atOrAfter date: Date) -> Date {
+        let base = VietnamClock.mainTime(onDayOf: date, hour: settings.mainHour, minute: settings.mainMinute)
+        return base.addingTimeInterval(ceil(date.timeIntervalSince(base) / period) * period)
+    }
 
     private func dose(slot: Date, anchor: Date) -> Dose {
         let deadline = anchor.addingTimeInterval(maxInterval)
@@ -338,38 +368,38 @@ public struct Planner: Sendable {
                     exceedsMaxInterval: false, anchor: anchor)
     }
 
-    /// After a take at T: the next dose belongs to the first main time after T + 12 h, so the take at T counts
-    /// for its nearest main time. Reminder = min(that main time, T + maximum gap).
+    /// After a take at T: the next dose belongs to the first dose time after T + half a period, so the take at T
+    /// counts for its nearest dose time. Reminder = min(that time, T + maximum gap).
     private func doseAfterTake(_ take: DoseRecord) -> Dose {
         let t = take.takenAt!
-        let slot = VietnamClock.firstMainTime(after: t.addingTimeInterval(12 * 3600), hour: settings.mainHour, minute: settings.mainMinute)
+        let slot = firstSlot(after: t.addingTimeInterval(halfPeriod))
         guard take.nextAtMainTime else { return dose(slot: slot, anchor: t) }
-        // Realigned (back to the main time, or the main time changed): the next main time at least 6 h after the take,
-        // so moving the time earlier takes effect tomorrow instead of being swallowed by the 12 h rule.
-        let aligned = VietnamClock.firstMainTime(after: t.addingTimeInterval(6 * 3600), hour: settings.mainHour, minute: settings.mainMinute)
+        // Realigned (back to the main time, or the schedule changed): the next dose time at least a quarter period after
+        // the take, so moving the time earlier takes effect on the next dose instead of being swallowed by the half rule.
+        let aligned = firstSlot(after: t.addingTimeInterval(period / 4))
         let normalDeadline = t.addingTimeInterval(maxInterval)
         let deadline = max(aligned, normalDeadline)
         return Dose(slotAt: aligned, dueAt: aligned, deadlineAt: deadline, lateUntil: deadline.addingTimeInterval(lateWindow),
                     exceedsMaxInterval: aligned > normalDeadline, anchor: t)
     }
 
-    /// After a miss: the virtual anchor is the deadline that passed (capped at main time + 12 h so it cannot drift),
-    /// so two consecutive ringing alarms are never further apart than the maximum gap.
+    /// After a miss: the virtual anchor is the deadline that passed (capped at dose time + half a period so it cannot
+    /// drift), so two consecutive ringing alarms are never further apart than the maximum gap.
     private func doseAfterMiss(_ previous: Dose) -> Dose {
-        let anchor = min(previous.deadlineAt, previous.slotAt.addingTimeInterval(12 * 3600))
-        var slot = previous.slotAt.addingTimeInterval(VietnamClock.day)
-        while slot <= previous.deadlineAt { slot = slot.addingTimeInterval(VietnamClock.day) }
+        let anchor = min(previous.deadlineAt, previous.slotAt.addingTimeInterval(halfPeriod))
+        var slot = previous.slotAt.addingTimeInterval(period)
+        while slot <= previous.deadlineAt { slot = slot.addingTimeInterval(period) }
         return dose(slot: slot, anchor: anchor)
     }
 
-    /// After a pause: the next dose starts from the first main time at or after the pause ends.
+    /// After a pause: the next dose starts from the first dose time at or after the pause ends.
     private func doseAfterPause(_ end: Date) -> Dose {
-        doseFromMainTime(VietnamClock.firstMainTime(atOrAfter: end, hour: settings.mainHour, minute: settings.mainMinute))
+        doseFromMainTime(firstSlot(atOrAfter: end))
     }
 
-    /// A dose at the main time, as if the previous one was taken at the main time the day before.
+    /// A dose at its scheduled time, as if the previous one was taken on time one period before.
     private func doseFromMainTime(_ slot: Date) -> Dose {
-        dose(slot: slot, anchor: slot.addingTimeInterval(-min(maxInterval, VietnamClock.day)))
+        dose(slot: slot, anchor: slot.addingTimeInterval(-min(maxInterval, period)))
     }
 
     private func chain(for dose: Dose) -> [ReminderEvent] {
@@ -397,7 +427,7 @@ public struct Planner: Sendable {
         list.append(event(deadline, .deadline))
         // Past the deadline, all ringing: repeats like after the main time, then the final cadence until `overdueBurst`,
         // then hourly until the late window ends.
-        let burstEnd = deadline.addingTimeInterval(max(0, settings.overdueBurst))
+        let burstEnd = deadline.addingTimeInterval(overdueBurst)
         var overdue: [Date] = (0..<max(0, settings.repeatCount)).map { deadline.addingTimeInterval(TimeInterval($0 + 1) * repeatStep) }
         var next = (overdue.last ?? deadline).addingTimeInterval(max(60, settings.finalInterval))
         while next <= burstEnd {

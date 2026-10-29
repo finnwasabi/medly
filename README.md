@@ -17,9 +17,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/onboarding-vi.png" width="250" alt="Onboarding">
+  <img src="docs/screenshots/today-vi.png" width="250" alt="Today">
+  <img src="docs/screenshots/meds-dark.png" width="250" alt="Meds, dark mode">
   <img src="docs/screenshots/history-en.png" width="250" alt="History">
-  <img src="docs/screenshots/settings-dark.png" width="250" alt="Settings, dark mode">
 </p>
 
 <p align="center"><a href="#english">English below</a></p>
@@ -31,13 +31,14 @@ Ner's Daily giữ lịch theo giờ Việt Nam, báo thức kêu cả khi máy i
 
 ### Có gì
 
+- **Nhiều loại thuốc.** Mỗi thuốc có tên, màu, giờ, số lần mỗi ngày (1 tới 6), khoảng cách tối đa và số viên riêng. Thuốc trùng giờ báo chung một chuông.
 - **Luôn giờ Việt Nam.** Mọi mốc là thời điểm tuyệt đối, đổi múi giờ máy không làm lệch. Màn hình hiện cả giờ nơi đang đứng.
 - **Báo thức thật (AlarmKit).** Kêu cả khi gạt im lặng hay bật Focus. Hoặc chọn chế độ theo máy, riêng hạn chót luôn kêu.
-- **Nhắc tới khi uống.** Nhắc lại, dồn dập trước hạn chót 24 giờ, quá hạn vẫn nhắc tiếp. Hoãn có đếm ngược trên màn khoá.
-- **Trễ, hụt và uống bù.** Uống sau hạn chót tính trễ, quá 12 giờ tính hụt, đánh dấu được uống bù cho viên hụt.
+- **Nhắc tới khi uống.** Nhắc lại, dồn dập trước hạn chót, quá hạn vẫn nhắc tiếp. Hoãn 9 phút như Đồng hồ iPhone (chỉnh 1 tới 15), hoãn mãi cũng được, chỉ bấm Đã uống mới tắt.
+- **Trễ, hụt và uống bù.** Uống sau hạn chót tính trễ, quá thêm nửa chu kỳ (12 giờ với thuốc mỗi ngày) tính hụt, đánh dấu được uống bù.
 - **Đếm viên (tuỳ chọn).** Trừ mỗi lần uống, nhắc mua vỉ mới khi còn ít.
 - **Không cần mạng.** Có mạng thì gửi trạng thái lên dịch vụ tự host để partner theo dõi qua bot Telegram riêng.
-- **Tiếng Việt và tiếng Anh**, chế độ sáng và tối.
+- **Tiếng Việt và tiếng Anh**, chế độ sáng và tối, giao diện neubrutalism dễ thương.
 
 ### Cài đặt
 
@@ -64,13 +65,14 @@ Ner's Daily keeps the schedule on Vietnam time, rings even on silent, and works 
 
 ### Features
 
+- **Several medications.** Each has its own name, color, time, doses per day (1 to 6), maximum gap and pill count. Medications due together share one alarm.
 - **Always Vietnam time.** Every reminder is an absolute moment, so changing the phone's time zone never shifts it. Screens also show the local time.
 - **Real alarms (AlarmKit).** They ring on silent and in Focus. Or follow the phone's mode, except that the deadline always rings.
-- **Reminds until taken.** Repeats, then a faster cadence before the 24-hour deadline, and it keeps going after it. Snooze shows a lock screen countdown.
-- **Late, missed and made up.** A dose after the deadline counts as late, after 12 more hours as missed, and a missed pill can be marked as made up.
+- **Reminds until taken.** Repeats, then a faster cadence before the deadline, and it keeps going after it. Snooze is 9 minutes like the iPhone Clock (1 to 15), as often as you like; only Taken stops it.
+- **Late, missed and made up.** A dose after the deadline counts as late, after half a period more (12 hours for a daily one) as missed, and a miss can be marked as made up.
 - **Pill counting (optional).** One pill per dose, with a refill reminder when the pack runs low.
 - **Offline first.** When online, the latest status goes to a self-hosted service so a partner can follow along through a private Telegram bot.
-- **Vietnamese and English**, light and dark mode.
+- **Vietnamese and English**, light and dark mode, in a cute neubrutalist look.
 
 ### Install
 
@@ -85,7 +87,7 @@ https://github.com/finnwasabi/ners-daily/releases/latest/download/source.json
 
 - Xcode 26 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen): run `xcodegen generate`, then open `NersDaily.xcodeproj`.
 - The scheduling logic lives in `Packages/NersCore` (pure Swift, tested): `swift test --package-path Packages/NersCore`.
-- Sync service and bot: [server/](server/README.md). Logic and data contract: [docs/spec.md](docs/spec.md) (Vietnamese).
+- Sync service and bot: [server/](server/README.md). Logic and data contract: [docs/spec.md](docs/spec.md).
 - Contributing: see [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
 
 The app only keeps time. It gives no medical advice: for how to take or make up a pill, check the leaflet or ask a doctor or pharmacist.

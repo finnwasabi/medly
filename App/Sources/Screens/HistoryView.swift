@@ -5,61 +5,112 @@ struct HistoryView: View {
     @Environment(AppModel.self) private var model
     /// 0 is this month, -1 the previous one.
     @State private var monthOffset = 0
-    @State private var editing: DoseRecord?
+    /// `nil` shows every medication.
+    @State private var filter: UUID?
+    @State private var editing: Entry?
+
+    /// A history row with the medication it belongs to.
+    struct Entry: Identifiable {
+        var medication: Medication
+        var record: DoseRecord
+        var id: UUID { record.id }
+    }
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
     private var calendar: Calendar { VietnamClock.calendar }
 
     var body: some View {
         let now = Date.now
-        let planner = model.planner
+        let shown = model.medications.filter { filter == nil || $0.id == filter }
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    summaryCard(planner: planner, now: now)
-                    calendarCard(days: planner.dayStatuses(now: now), now: now)
-                    entriesCard(planner.timeline(now: now).reversed().prefix(14).map { $0 })
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(L("Lịch sử", "History"))
+                        .font(.largeTitle.weight(.black))
+                        .foregroundStyle(Palette.text)
+                        .padding(.top, 12)
+                    if model.medications.count > 1 { filterBar }
+                    summaryCard(shown, now: now)
+                    calendarCard(days: mergedDayStatuses(shown.map { $0.planner.dayStatuses(now: now) }), now: now)
+                    entriesCard(shown.flatMap { med in med.planner.timeline(now: now).map { Entry(medication: med, record: $0) } }
+                        .sorted { moment($0.record) > moment($1.record) }
+                        .prefix(20).map { $0 })
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
             .background(Palette.background)
-            .navigationTitle(L("Lịch sử", "History"))
-            .sheet(item: $editing) { record in
-                EditTakenTimeSheet(record: record)
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(item: $editing) { entry in
+                EditTakenTimeSheet(medicationID: entry.medication.id, record: entry.record)
+            }
+            .onChange(of: model.medications.map(\.id)) { _, ids in
+                if let filter, !ids.contains(filter) { self.filter = nil }
             }
         }
     }
 
-    private func summaryCard(planner: Planner, now: Date) -> some View {
+    private func moment(_ record: DoseRecord) -> Date {
+        record.status == .madeUp ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
+    }
+
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip(L("Tất cả", "All"), fill: Palette.yellow, selected: filter == nil) { filter = nil }
+                ForEach(model.medications) { med in
+                    chip(med.name, fill: Swatch.color(med.color), selected: filter == med.id) { filter = med.id }
+                }
+            }
+            .padding(.vertical, 4)
+            .padding(.trailing, 6)
+        }
+    }
+
+    private func chip(_ title: String, fill: Color, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.heavy))
+                .lineLimit(1)
+                .foregroundStyle(selected ? Palette.onFill : Palette.text)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 38)
+                .neo(selected ? fill : Palette.surface, radius: 12, shadow: selected ? 0 : 2.5)
+                .offset(x: selected ? 2.5 : 0, y: selected ? 2.5 : 0)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func summaryCard(_ medications: [Medication], now: Date) -> some View {
+        let planners = medications.map(\.planner)
+        let sum = { (value: (Planner) -> Int) in planners.map(value).reduce(0, +) }
+        let madeUp = sum { $0.madeUpCount(now: now) }
         // Top alignment keeps the numbers level even if one label wraps.
-        HStack(alignment: .top, spacing: 0) {
-            stat(value: planner.daysTaken(now: now), label: L("đã uống", "taken"), color: DoseStatus.taken.foreground)
-            Divider().frame(height: 40).padding(.top, 6)
-            stat(value: planner.lateCount(now: now), label: L("lần trễ", "late"), color: DoseStatus.late.foreground)
-            Divider().frame(height: 40).padding(.top, 6)
-            stat(value: planner.madeUpCount(now: now), label: L("uống bù", "made up"), color: DoseStatus.madeUp.foreground)
-            Divider().frame(height: 40).padding(.top, 6)
-            stat(value: planner.missedCount(now: now) - planner.madeUpCount(now: now), label: L("viên hụt", "missed"), color: DoseStatus.missed.foreground)
+        return HStack(alignment: .top, spacing: 8) {
+            stat(value: sum { $0.daysTaken(now: now) }, label: L("đã uống", "taken"), status: .taken)
+            stat(value: sum { $0.lateCount(now: now) }, label: L("lần trễ", "late"), status: .late)
+            stat(value: madeUp, label: L("uống bù", "made up"), status: .madeUp)
+            stat(value: sum { $0.missedCount(now: now) } - madeUp, label: L("lần hụt", "missed"), status: .missed)
         }
         // Four columns: cap the text size so labels never break mid-word.
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-        .card()
     }
 
-    private func stat(value: Int, label: String, color: Color) -> some View {
+    private func stat(value: Int, label: String, status: DoseStatus) -> some View {
         VStack(spacing: 2) {
             Text("\(value)")
-                .font(.title.bold().monospacedDigit())
-                .foregroundStyle(color)
+                .font(.title.weight(.black).monospacedDigit())
             Text(label)
-                .font(.footnote)
-                .foregroundStyle(Palette.textSecondary)
+                .font(.footnote.weight(.heavy))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity)
+        .foregroundStyle(Palette.onFill)
+        .frame(maxWidth: .infinity, minHeight: 76)
+        .neo(status.fill, radius: 14)
+        .accessibilityElement(children: .combine)
     }
 
     private func calendarCard(days: [Date: NersCore.DoseStatus], now: Date) -> some View {
@@ -72,22 +123,22 @@ struct HistoryView: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(TodayText.monthTitle(month: parts.month!, year: parts.year!))
-                    .font(.headline)
+                    .font(.headline.weight(.black))
                     .foregroundStyle(Palette.text)
                 Spacer()
                 Button { monthOffset -= 1 } label: { Image(systemName: "chevron.left") }
+                    .buttonStyle(ChipButtonStyle())
                     .accessibilityLabel(L("Tháng trước", "Previous month"))
                 Button { monthOffset += 1 } label: { Image(systemName: "chevron.right") }
+                    .buttonStyle(ChipButtonStyle())
                     .accessibilityLabel(L("Tháng sau", "Next month"))
                     .disabled(monthOffset >= 0)
-                    .padding(.leading, 16)
             }
-            .foregroundStyle(Palette.primary)
             LazyVGrid(columns: columns, spacing: 6) {
                 // Three kinds of cells share one grid, so ids use separate ranges: weekday headers -1 to -7, blanks from -100, days from 1.
                 ForEach([-2, -3, -4, -5, -6, -7, -1], id: \.self) { weekday in
                     Text(TodayText.shortWeekday(-weekday))
-                        .font(.caption.weight(.semibold))
+                        .font(.caption.weight(.heavy))
                         .foregroundStyle(Palette.textSecondary)
                 }
                 ForEach((0..<leading).map { -100 - $0 }, id: \.self) { _ in Color.clear.frame(height: 40) }
@@ -103,28 +154,35 @@ struct HistoryView: View {
         .card()
     }
 
+    @ViewBuilder
     private func dayCell(day: Int, status: DoseStatus?, isToday: Bool) -> some View {
-        Text("\(day)")
-            .font(.callout.weight(.semibold).monospacedDigit())
+        let label = Text("\(day)")
+            .font(.callout.weight(.heavy).monospacedDigit())
             .frame(maxWidth: .infinity, minHeight: 40)
-            .foregroundStyle(status?.foreground ?? Palette.textSecondary)
-            .background(status?.background ?? .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay {
-                if isToday {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Palette.primary, lineWidth: 2)
-                }
+        Group {
+            if let status {
+                label.foregroundStyle(Palette.onFill).neo(status.fill, radius: 10, shadow: 0)
+            } else if isToday {
+                label.foregroundStyle(Palette.text).neo(Palette.background, radius: 10, shadow: 0)
+            } else {
+                label.foregroundStyle(Palette.textSecondary)
             }
-            .accessibilityLabel(L("Ngày \(day), \(status?.label ?? "chưa có")", "Day \(day), \(status?.label ?? "no record")"))
+        }
+        .accessibilityLabel(L("Ngày \(day), \(status?.label ?? "chưa có")", "Day \(day), \(status?.label ?? "no record")"))
     }
 
     private var legend: some View {
         // Wraps to two rows on narrow screens.
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), alignment: .leading)], alignment: .leading, spacing: 6) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), alignment: .leading)], alignment: .leading, spacing: 8) {
             ForEach([DoseStatus.taken, .late, .madeUp, .missed, .paused], id: \.self) { status in
-                Label(status.label, systemImage: status.icon)
-                    .font(.caption)
-                    .foregroundStyle(status.foreground)
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 4).fill(status.fill)
+                        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Palette.ink, lineWidth: 1.5))
+                        .frame(width: 14, height: 14)
+                    Text(status.label)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Palette.text)
+                }
             }
         }
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
@@ -132,51 +190,62 @@ struct HistoryView: View {
     }
 
     private func entryDetail(_ record: DoseRecord) -> String {
-        guard let takenAt = record.takenAt else { return L("giờ uống \(TimeFormatting.vn(record.scheduledAt))", "pill time \(TimeFormatting.vn(record.scheduledAt))") }
+        guard let takenAt = record.takenAt else { return L("giờ uống \(TimeFormatting.vn(record.scheduledAt))", "dose time \(TimeFormatting.vn(record.scheduledAt))") }
         if record.status == .madeUp { return L("uống bù lúc \(TimeFormatting.vn(takenAt)), \(TodayText.dayTitle(takenAt))", "made up at \(TimeFormatting.vn(takenAt)), \(TodayText.dayTitle(takenAt))") }
         return TimeFormatting.vn(takenAt)
     }
 
-    private func entriesCard(_ records: [DoseRecord]) -> some View {
+    private func entriesCard(_ entries: [Entry]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(L("Gần đây", "Recent"))
-                .font(.headline)
+                .font(.headline.weight(.black))
                 .foregroundStyle(Palette.text)
                 .padding(.bottom, 8)
-            if records.isEmpty {
+            if entries.isEmpty {
                 Text(L("Chưa có lần uống nào.", "No doses yet."))
+                    .font(.body.weight(.medium))
                     .foregroundStyle(Palette.textSecondary)
                     .padding(.vertical, 10)
             }
-            ForEach(records) { record in
+            ForEach(entries) { entry in
+                let record = entry.record
                 // Missed or paused rows are not editable: no button wrapper, so the text is not dimmed like a disabled button.
                 let row = HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 3).fill(Swatch.color(entry.medication.color))
+                        .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Palette.ink, lineWidth: 1.5))
+                        .frame(width: 8)
+                        .padding(.vertical, 4)
                     VStack(alignment: .leading, spacing: 2) {
-                            Text(TodayText.dayTitle(record.status == .madeUp ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)))
-                                .font(.body.weight(.medium))
-                                .foregroundStyle(Palette.text)
-                            Text(entryDetail(record))
-                                .font(.footnote)
-                                .foregroundStyle(Palette.textSecondary)
-                        }
-                        Spacer()
-                        StatusPill(status: DoseStatus(record.status))
+                        Text(entry.medication.name)
+                            .font(.footnote.weight(.heavy))
+                            .foregroundStyle(Palette.textSecondary)
+                        Text(TodayText.dayTitle(moment(record)))
+                            .font(.body.weight(.bold))
+                            .foregroundStyle(Palette.text)
+                        Text(entryDetail(record))
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(Palette.textSecondary)
                     }
-                    .padding(.vertical, 10)
-                    .contentShape(Rectangle())
+                    Spacer()
+                    StatusPill(status: DoseStatus(record.status))
+                }
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
                 if record.takenAt != nil {
-                    Button { editing = record } label: { row }
+                    Button { editing = entry } label: { row }
                         .buttonStyle(.plain)
                         .accessibilityHint(L("Sửa giờ uống", "Edit time"))
                 } else {
                     row
                 }
-                if record.id != records.last?.id { Divider() }
+                if entry.id != entries.last?.id { InkDivider() }
             }
-            Text(L("Chạm vào một lần uống để sửa giờ.", "Tap a dose to edit its time."))
-                .font(.footnote)
-                .foregroundStyle(Palette.textSecondary)
-                .padding(.top, 8)
+            if !entries.isEmpty {
+                Text(L("Chạm vào một lần uống để sửa giờ.", "Tap a dose to edit its time."))
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Palette.textSecondary)
+                    .padding(.top, 8)
+            }
         }
         .card()
     }
@@ -184,6 +253,7 @@ struct HistoryView: View {
 
 /// Edits the taken time of a dose, entered in Vietnam time.
 struct EditTakenTimeSheet: View {
+    let medicationID: UUID
     let record: DoseRecord
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -192,16 +262,27 @@ struct EditTakenTimeSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                DatePicker(L("Giờ uống (giờ VN)", "Pill time (VN time)"), selection: $date, in: ...Date.now)
-                    .environment(\.timeZone, VietnamClock.timeZone)
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L("Giờ uống (giờ VN)", "Dose time (VN time)"))
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(Palette.text)
+                    DatePicker("", selection: $date, in: ...Date.now)
+                        .labelsHidden()
+                        .environment(\.timeZone, VietnamClock.timeZone)
+                }
+                .card()
                 if record.status == .madeUp {
                     Button(L("Xoá lần uống bù", "Delete make-up"), role: .destructive) { confirmRemove = true }
+                        .buttonStyle(NeoButtonStyle(fill: Palette.coral, large: false))
                 }
+                Spacer()
             }
+            .padding(16)
+            .background(Palette.background)
             .confirmationDialog(L("Xoá lần uống bù này?", "Delete this make-up?"), isPresented: $confirmRemove, titleVisibility: .visible) {
                 Button(L("Xoá", "Delete"), role: .destructive) {
-                    model.update { $0.removeRecord(id: record.id) }
+                    model.update(medicationID) { $0.planner.removeRecord(id: record.id) }
                     dismiss()
                 }
             } message: {
@@ -213,15 +294,16 @@ struct EditTakenTimeSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button(L("Huỷ", "Cancel")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L("Lưu", "Save")) {
-                        model.update { $0.editTakenTime(id: record.id, to: date) }
+                        model.update(medicationID) { $0.planner.editTakenTime(id: record.id, to: date) }
                         dismiss()
                     }
+                    .fontWeight(.heavy)
                 }
             }
             .onAppear { date = record.takenAt ?? .now }
         }
         .presentationDetents([.medium])
-        .tint(Palette.primary)
+        .tint(Palette.ink)
     }
 }
 

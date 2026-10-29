@@ -3,17 +3,16 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApp, createBot, createStore, changeText, setLanguage, statusText, validateSnapshot, vnTime } from '../server.js';
+import { createApp, createBot, createStore, changeText, esc, normalize, statusText, validateSnapshot, vnTime } from '../server.js';
 
-// The sample from docs/spec.md.
-const spec = {
-  schemaVersion: 1,
-  name: 'Ner',
-  updatedAt: '2026-10-27T14:03:00Z',
+const pill = {
+  id: '6F9619FF-8B86-D011-B42D-00C04FC964FF',
+  name: 'Daily pill',
+  dosesPerDay: 1,
   lastTakenAt: '2026-10-27T14:03:00Z',
   nextDueAt: '2026-10-28T14:00:00Z',
   deadlineAt: '2026-10-28T14:03:00Z',
-  daysTaken: 12,
+  takenCount: 12,
   missedCount: 1,
   lateCount: 0,
   madeUpCount: 0,
@@ -23,6 +22,17 @@ const spec = {
   pausedUntil: null,
 };
 
+// The sample from docs/spec.md.
+const spec = { schemaVersion: 2, name: 'Ner', updatedAt: '2026-10-27T14:03:00Z', medications: [pill] };
+
+// The version 1 shape sent by app versions before 0.2.0.
+const v1 = {
+  schemaVersion: 1, name: 'Ner', updatedAt: '2026-10-27T14:03:00Z', lastTakenAt: '2026-10-27T14:03:00Z',
+  nextDueAt: '2026-10-28T14:00:00Z', deadlineAt: '2026-10-28T14:03:00Z', daysTaken: 12, missedCount: 1, lateCount: 0,
+  madeUpCount: 0, pillsTotal: 28, pillsRemaining: 16, refillReminder: { enabled: true, daysBefore: 7 }, pausedUntil: null,
+};
+
+const later = (snapshot, iso, patch = {}) => ({ ...snapshot, updatedAt: iso, medications: snapshot.medications.map((m) => ({ ...m, ...patch })) });
 const tempStore = () => createStore(mkdtempSync(join(tmpdir(), 'ners-')));
 
 async function withServer(store, run) {
@@ -42,6 +52,19 @@ async function withServer(store, run) {
   }
 }
 
+function fakeTelegram() {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    const method = url.split('/').pop();
+    calls.push({ method, body: JSON.parse(init.body) });
+    if (method === 'editMessageText' && calls.filter((c) => c.method === 'editMessageText').length > 1) {
+      return { json: async () => ({ ok: false, description: 'Bad Request: message is not modified' }) };
+    }
+    return { json: async () => ({ ok: true, result: [] }) };
+  };
+  return { calls, fetchImpl };
+}
+
 test('times are shown in Vietnam time', () => {
   assert.equal(vnTime('2026-10-27T14:03:00Z'), '21:03');
   assert.equal(vnTime('2026-10-27T18:30:00Z'), '01:30');
@@ -49,10 +72,29 @@ test('times are shown in Vietnam time', () => {
 
 test('spec example is valid, broken ones are not', () => {
   assert.equal(validateSnapshot(spec), null);
-  assert.equal(validateSnapshot({ ...spec, lateCount: undefined }), null);
+  assert.equal(validateSnapshot({ ...spec, medications: [] }), null);
   assert.match(validateSnapshot({ ...spec, updatedAt: '2026-10-27 14:03' }), /updatedAt/);
-  assert.match(validateSnapshot({ ...spec, schemaVersion: 2 }), /schemaVersion/);
-  assert.match(validateSnapshot({ ...spec, pillsRemaining: -1 }), /pillsRemaining/);
+  assert.match(validateSnapshot({ ...spec, schemaVersion: 3 }), /schemaVersion/);
+  assert.match(validateSnapshot(later(spec, spec.updatedAt, { pillsRemaining: -1 })), /medications\[0\]\.pillsRemaining/);
+  assert.match(validateSnapshot(later(spec, spec.updatedAt, { dosesPerDay: 5 })), /dosesPerDay/);
+  assert.match(validateSnapshot(later(spec, spec.updatedAt, { id: '' })), /id/);
+  assert.match(validateSnapshot({ ...spec, medications: Array(31).fill(pill) }), /at most 30/);
+  assert.match(validateSnapshot({ ...spec, name: 'x'.repeat(61) }), /name/);
+});
+
+test('version 1 from older apps is still accepted and stored as version 2', async () => {
+  assert.equal(validateSnapshot(v1), null);
+  assert.equal(validateSnapshot({ ...v1, lateCount: undefined }), null);
+  assert.match(validateSnapshot({ ...v1, daysTaken: 'x' }), /daysTaken/);
+  const store = tempStore();
+  await withServer(store, async (request) => {
+    assert.equal((await request('POST', v1)).status, 200);
+    const stored = await (await request('GET')).json();
+    assert.equal(stored.schemaVersion, 2);
+    assert.equal(stored.medications[0].takenCount, 12);
+  });
+  // The first version 2 sync after the upgrade is not reported as a new and a removed medication.
+  assert.equal(changeText(v1, later(spec, '2026-10-27T15:00:00Z')), null);
 });
 
 test('POST keeps only the newest snapshot and reports stale ones', async () => {
@@ -60,103 +102,145 @@ test('POST keeps only the newest snapshot and reports stale ones', async () => {
   await withServer(store, async (request, sent) => {
     assert.equal((await request('GET')).status, 404);
     assert.equal((await request('POST', spec, 'wrong')).status, 401);
-    assert.equal((await request('POST', { ...spec, daysTaken: 'x' })).status, 400);
+    assert.equal((await request('POST', { ...spec, medications: 'x' })).status, 400);
 
     let res = await request('POST', spec);
     assert.deepEqual(await res.json(), { stale: false, message: null });
     assert.equal(sent.length, 1);
-    assert.match(sent[0], /Ner đã uống lúc 21:03 giờ VN, còn 16 viên/);
+    assert.match(sent[0], /connected/);
 
-    res = await request('POST', { ...spec, updatedAt: '2026-10-27T13:00:00Z', daysTaken: 99 });
+    res = await request('POST', later(spec, '2026-10-27T13:00:00Z', { takenCount: 99 }));
     assert.equal((await res.json()).stale, true);
-    assert.equal((await (await request('GET')).json()).daysTaken, 12);
+    assert.equal((await (await request('GET')).json()).medications[0].takenCount, 12);
 
-    // Reopening the app with nothing new: stored but no message.
-    await request('POST', { ...spec, updatedAt: '2026-10-27T15:00:00Z' });
-    assert.equal(sent.length, 1);
+    // A new dose is reported once; reopening the app with nothing new stays quiet.
+    await request('POST', later(spec, '2026-10-28T14:01:00Z', { lastTakenAt: '2026-10-28T14:01:00Z', pillsRemaining: 15 }));
+    assert.equal(sent.at(-1), '✅ Ner took <b>Daily pill</b> at 21:01 · 15 pills left');
+    await request('POST', later(spec, '2026-10-28T15:00:00Z', { lastTakenAt: '2026-10-28T14:01:00Z', pillsRemaining: 15 }));
+    assert.equal(sent.length, 2);
   });
 });
 
 test('message set by the bot comes back on the next sync', async () => {
   const store = tempStore();
-  store.set({ message: 'Ngủ sớm nha' });
+  store.set({ message: 'Sleep early tonight' });
   await withServer(store, async (request) => {
-    assert.deepEqual(await (await request('POST', spec)).json(), { stale: false, message: 'Ngủ sớm nha' });
+    assert.deepEqual(await (await request('POST', spec)).json(), { stale: false, message: 'Sleep early tonight' });
   });
 });
 
-test('change text covers miss, late, pause and refill', () => {
-  const next = { ...spec, missedCount: 2, lateCount: 1, pillsRemaining: 7, pausedUntil: '2026-10-30T14:00:00Z' };
-  const text = changeText({ ...spec, pillsRemaining: 8 }, next);
-  assert.match(text, /hụt \(tổng 2\)/);
-  assert.match(text, /trễ \(tổng 1\)/);
-  assert.match(text, /tạm dừng nhắc tới 21:00/);
-  assert.match(text, /Còn 7 viên, nhớ mua vỉ mới/);
-  assert.equal(changeText(spec, { ...spec, updatedAt: '2026-10-27T15:00:00Z' }), null);
-});
-
-test('make-up dose is reported and counted apart from missed ones', () => {
-  const missed = { ...spec, missedCount: 2, madeUpCount: 0 };
-  const madeUp = { ...missed, updatedAt: '2026-10-27T15:00:00Z', madeUpCount: 1 };
-  assert.match(changeText(missed, madeUp), /uống bù viên hụt \(còn 1 viên hụt chưa bù\)/);
-  assert.match(statusText(madeUp, Date.parse('2026-10-28T01:00:00Z')), /hụt 1, đã uống bù 1\./);
-  assert.match(validateSnapshot({ ...spec, madeUpCount: -1 }), /madeUpCount/);
-});
-
-test('messages use the name from the app, or a neutral word without one', () => {
-  assert.match(changeText(null, { ...spec, name: null }), /^✅ Người ấy đã uống/);
-  assert.match(statusText({ ...spec, name: 'Mai' }), /^💊 Mai/);
-  assert.match(statusText({ ...spec, name: null }), /^💊 Ner's Daily/);
-  assert.match(validateSnapshot({ ...spec, name: 'x'.repeat(61) }), /name/);
+test('change text covers miss, late, make-up, pause, refill, added and removed', () => {
+  const iron = { ...pill, id: 'iron', name: 'Iron <3', dosesPerDay: 2, pillsTotal: null, pillsRemaining: null };
+  const before = { ...spec, medications: [{ ...pill, pillsRemaining: 8 }, iron] };
+  const next = { ...spec, updatedAt: '2026-10-28T15:00:00Z', medications: [
+    { ...pill, missedCount: 2, lateCount: 1, madeUpCount: 1, pillsRemaining: 7, pausedUntil: '2026-10-30T14:00:00Z' },
+    { ...iron, id: 'zinc', name: 'Zinc' },
+  ] };
+  const text = changeText(before, next);
+  assert.match(text, /🟡 <b>Daily pill<\/b> was taken late \(1 late so far\)\./);
+  assert.match(text, /🔴 A dose of <b>Daily pill<\/b> was missed \(1 not made up\)\./);
+  assert.match(text, /🔵 Ner made up a missed <b>Daily pill<\/b> dose \(1 still to make up\)\./);
+  assert.match(text, /⏸️ <b>Daily pill<\/b> reminders are paused until 21:00 · Fri 30\/10\./);
+  assert.match(text, /🛒 <b>Daily pill<\/b> is running low: 7 pills left\./);
+  assert.match(text, /🆕 Ner added <b>Zinc<\/b> \(2× a day\)\./);
+  assert.match(text, /🗑️ Ner removed <b>Iron &lt;3<\/b>\./);
+  assert.equal(changeText(spec, later(spec, '2026-10-27T15:00:00Z')), null);
 });
 
 test('undo is reported as undo, not as a new dose at the older time', () => {
-  const undone = { ...spec, updatedAt: '2026-10-27T14:05:00Z', lastTakenAt: '2026-10-26T14:01:00Z' };
-  assert.equal(changeText(spec, undone), '↩️ Ner đã hoàn tác hoặc sửa giờ lần uống gần nhất.');
-  assert.match(changeText(null, spec), /Ner đã uống lúc 21:03/);
+  const undone = later(spec, '2026-10-27T14:05:00Z', { lastTakenAt: '2026-10-26T14:01:00Z' });
+  assert.equal(changeText(spec, undone), '↩️ Ner undid or edited the last <b>Daily pill</b> dose.');
 });
 
-test('status text marks data older than 24 hours', () => {
-  const fresh = statusText(spec, Date.parse('2026-10-28T01:00:00Z'));
-  assert.match(fresh, /Đã uống 12 ngày, trễ 0, hụt 1/);
-  assert.match(fresh, /Còn 16\/28 viên\./);
-  assert.match(fresh, /Cập nhật lúc 21:03 giờ VN/);
-  assert.match(statusText(spec, Date.parse('2026-10-29T01:00:00Z')), /Chưa đồng bộ từ 21:03/);
-  assert.equal(statusText(null), 'Chưa nhận được dữ liệu nào từ app.');
+test('names come from the app, with a neutral word without one, and are escaped', () => {
+  const unnamed = { ...spec, name: null };
+  assert.match(changeText(unnamed, later(unnamed, '2026-10-28T14:01:00Z', { lastTakenAt: '2026-10-28T14:01:00Z' })), /^✅ They took/);
+  assert.match(statusText({ ...spec, name: 'Mai' }), /^💊 <b>Mai's meds<\/b>/);
+  assert.match(statusText(unnamed), /^💊 <b>Ner's Daily<\/b>/);
+  assert.match(statusText({ ...spec, name: '<b>x</b>' }), /&lt;b&gt;x&lt;\/b&gt;'s meds/);
+  assert.equal(esc('a & <b>'), 'a &amp; &lt;b&gt;');
 });
 
-test('bot answers only its chat and sends the 09:00 report once a day', async () => {
+test('status text lists every medication and marks data older than 24 hours', () => {
+  const two = { ...spec, medications: [pill, { ...pill, id: 'b', name: 'Iron', dosesPerDay: 2, madeUpCount: 1, pillsTotal: null,
+    lastTakenAt: null, pausedUntil: '2026-10-30T01:00:00Z' }] };
+  const fresh = statusText(two, Date.parse('2026-10-28T01:00:00Z'));
+  assert.match(fresh, /<b>Daily pill<\/b> · daily\n✅ Last taken 21:03 · Tue 27\/10\n⏰ Next 21:00 · Wed 28\/10, deadline 21:03/);
+  assert.match(fresh, /📊 12 taken · 0 late · 1 missed\n💊 16 of 28 pills left/);
+  assert.match(fresh, /<b>Iron<\/b> · 2× a day\n🌱 No doses logged yet\n⏸️ Paused until 08:00 · Fri 30\/10/);
+  assert.match(fresh, /· 1 made up/);
+  assert.match(fresh, /🕘 Updated 21:03 VN time$/);
+  assert.match(statusText(spec, Date.parse('2026-10-29T01:00:00Z')), /⚠️ Not synced since 21:03 · Tue 27\/10/);
+  assert.match(statusText(later(spec, spec.updatedAt, { pillsRemaining: 7 })), /7 of 28 pills left · 🛒 time to buy more/);
+  assert.match(statusText({ ...spec, medications: [] }), /No medications set up/);
+  assert.match(statusText(null), /^📭 Nothing here yet/);
+  assert.match(statusText(v1, Date.parse('2026-10-28T01:00:00Z')), /12 taken/);
+});
+
+test('bot commands answer in its chat with HTML, a copy button and a refresh button', async () => {
   const store = tempStore();
   store.set({ snapshot: spec });
-  const calls = [];
-  const fetchImpl = async (url, init) => {
-    calls.push({ method: url.split('/').pop(), body: JSON.parse(init.body) });
-    return { json: async () => ({ ok: true, result: [] }) };
-  };
+  const { calls, fetchImpl } = fakeTelegram();
   const bot = createBot({ token: 't', chatId: '42', store, publicUrl: 'https://x/ners', apiToken: 'secret-token', fetchImpl });
+  const last = () => calls.at(-1).body;
 
-  await bot.handle('/msg Uống thuốc rồi ngủ nha');
-  assert.equal(store.get().message, 'Uống thuốc rồi ngủ nha');
+  await bot.handle('/msg Take it and sleep <3');
+  assert.equal(store.get().message, 'Take it and sleep <3');
+  assert.match(last().text, /Saved! Ner will see it.*\n<i>Take it and sleep &lt;3<\/i>/);
+  assert.equal(last().parse_mode, 'HTML');
+  assert.equal(last().chat_id, '42');
+  await bot.handle('/msg');
+  assert.match(last().text, /Current note:\n<i>Take it and sleep &lt;3<\/i>/);
+  await bot.handle(`/msg ${'x'.repeat(301)}`);
+  assert.match(last().text, /bit long/);
+  assert.equal(store.get().message, 'Take it and sleep <3');
+  await bot.handle('/clearmsg');
+  assert.equal(store.get().message, null);
+  await bot.handle('/clearmsg');
+  assert.match(last().text, /no note/);
+
   await bot.handle('/link');
-  assert.match(calls.at(-1).body.text, /https:\/\/x\/ners#secret-token/);
-  assert.equal(calls.at(-1).body.chat_id, '42');
+  assert.match(last().text, /<code>https:\/\/x\/ners#secret-token<\/code>/);
+  assert.deepEqual(last().reply_markup.inline_keyboard[0][0].copy_text, { text: 'https://x/ners#secret-token' });
 
-  const before = calls.length;
-  await bot.dailyReport(Date.parse('2026-10-28T01:30:00Z')); // 08:30 Vietnam time: not yet
-  assert.equal(calls.length, before);
-  await bot.dailyReport(Date.parse('2026-10-28T02:00:00Z')); // 09:00 Vietnam time
-  await bot.dailyReport(Date.parse('2026-10-28T02:01:00Z'));
-  assert.equal(calls.length, before + 1);
-  assert.match(calls.at(-1).body.text, /Bản tin sáng/);
+  await bot.handle('/check@ner_daily_bot');
+  assert.match(last().text, /Daily pill/);
+  assert.equal(last().reply_markup.inline_keyboard[0][0].callback_data, 'refresh');
+
+  for (const [input, expected] of [['/start', /Hi!.*\/link/s], ['/help', /\/clearmsg/], ['/nope', /I don't know \/nope/], ['hello', /\/msg your note/]]) {
+    await bot.handle(input);
+    assert.match(last().text, expected);
+  }
+
+  await bot.handleCallback({ id: 'q1', data: 'refresh', message: { message_id: 7, chat: { id: 42 } } });
+  assert.equal(calls.at(-2).method, 'editMessageText');
+  assert.equal(calls.at(-2).body.message_id, 7);
+  assert.equal(last().text, '🔄 Updated');
+  await bot.handleCallback({ id: 'q2', data: 'refresh', message: { message_id: 7, chat: { id: 42 } } });
+  assert.equal(last().text, '✨ Already up to date');
 });
 
-test('English bot texts with BOT_LANGUAGE=en', () => {
-  setLanguage('en');
-  try {
-    assert.match(changeText(null, spec), /^✅ Ner took the pill at 21:03 VN time, 16 pills left\./);
-    assert.match(statusText(spec, Date.parse('2026-10-28T01:00:00Z')), /Taken 12 days, late 0, missed 1\./);
-    assert.match(statusText(spec, Date.parse('2026-10-28T01:00:00Z')), /Tuesday 27\/10/);
-  } finally {
-    setLanguage('vi');
-  }
+test('the 09:00 report is sent once a day', async () => {
+  const store = tempStore();
+  store.set({ snapshot: spec });
+  const { calls, fetchImpl } = fakeTelegram();
+  const bot = createBot({ token: 't', chatId: '42', store, publicUrl: 'https://x/ners', apiToken: 'secret-token', fetchImpl });
+  await bot.dailyReport(Date.parse('2026-10-28T01:30:00Z')); // 08:30 Vietnam time: not yet
+  assert.equal(calls.length, 0);
+  await bot.dailyReport(Date.parse('2026-10-28T02:00:00Z')); // 09:00 Vietnam time
+  await bot.dailyReport(Date.parse('2026-10-28T02:01:00Z'));
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].body.text, /^☀️ <b>Good morning!<\/b>/);
+});
+
+test('profile sets commands and descriptions', async () => {
+  const { calls, fetchImpl } = fakeTelegram();
+  const bot = createBot({ token: 't', chatId: '42', store: tempStore(), publicUrl: 'https://x/ners', apiToken: 'a', fetchImpl });
+  await bot.setProfile();
+  assert.deepEqual(calls.map((c) => c.method).sort(), ['setMyCommands', 'setMyDescription', 'setMyShortDescription']);
+  const commands = calls.find((c) => c.method === 'setMyCommands').body.commands.map((c) => c.command);
+  assert.deepEqual(commands, ['check', 'msg', 'clearmsg', 'link', 'help']);
+  assert.ok(calls.find((c) => c.method === 'setMyShortDescription').body.short_description.length <= 120);
+  assert.ok(calls.find((c) => c.method === 'setMyDescription').body.description.length <= 512);
+  assert.equal(normalize(null), null);
 });

@@ -11,7 +11,7 @@ import Testing
         planner.markTaken(at: vn(2026, 10, 25, 23, 31))
         planner.markTaken(at: vn(2026, 10, 27, 20))
         let now = vn(2026, 10, 27, 20, 5)
-        return (planner.events(now: now), try planner.snapshot(now: now).jsonData(), planner.nextReminder(now: now), planner.missedCount(now: now))
+        return (planner.events(now: now), try Snapshot(name: nil, medications: [Medication(id: UUID(uuidString: "6F9619FF-8B86-D011-B42D-00C04FC964FF")!, name: "TZ", settings: planner.settings, history: planner.history)], now: now).jsonData(), planner.nextReminder(now: now), planner.missedCount(now: now))
     }
 
     private func setDeviceTimeZone(_ zone: TimeZone) {

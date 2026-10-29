@@ -12,8 +12,10 @@ import Testing
         var steps = 0
 
         for _ in 0..<300 {
-            var planner = Planner(settings: ReminderSettings(mainHour: Int.random(in: 0...23, using: &rng),
-                                                             mainMinute: Int.random(in: 0...59, using: &rng)))
+            var settings = ReminderSettings(mainHour: Int.random(in: 0...23, using: &rng), mainMinute: Int.random(in: 0...59, using: &rng),
+                                            dosesPerDay: ReminderSettings.allowedDosesPerDay.randomElement(using: &rng)!)
+            settings.maxInterval = settings.period * [1, 1.25, 1.5].randomElement(using: &rng)!
+            var planner = Planner(settings: settings)
             var now = vn(2026, 1, 1, 0).addingTimeInterval(TimeInterval.random(in: 0...(300 * 24 * hour), using: &rng).rounded())
 
             for _ in 0..<40 {
@@ -35,15 +37,16 @@ import Testing
                     if let made = planner.history.filter({ $0.status == .madeUp }).randomElement(using: &rng) {
                         planner.removeRecord(id: made.id)
                     }
-                case 10: planner.changeMainTime(hour: Int.random(in: 0...23, using: &rng), minute: 0, now: now)
+                case 10: planner.changeSchedule(hour: Int.random(in: 0...23, using: &rng), minute: 0,
+                                                dosesPerDay: ReminderSettings.allowedDosesPerDay.randomElement(using: &rng)!, now: now)
                 default: planner.addPills(Int.random(in: 1...28, using: &rng), now: now)
                 }
                 try check(planner, now: now)
                 steps += 1
             }
             // Saving and loading never changes anything.
-            try store.save(planner)
-            let loaded = try store.load()
+            try store.save([Medication(name: "Fuzz", settings: planner.settings, history: planner.history)])
+            let loaded = try #require(store.load().first)
             #expect(loaded.settings == planner.settings)
             #expect(loaded.history == planner.history)
         }
@@ -76,7 +79,7 @@ import Testing
         #expect(planner.lateCount(now: now) >= 0)
         _ = planner.dayStatuses(now: now)
 
-        let snapshot = planner.snapshot(now: now)
+        let snapshot = Snapshot(name: nil, medications: [Medication(name: "Fuzz", settings: planner.settings, history: planner.history)], now: now)
         #expect(try Snapshot.decode(from: snapshot.jsonData()) == snapshot)
     }
 }
