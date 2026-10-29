@@ -1,5 +1,6 @@
 import AlarmKit
 import Foundation
+import Network
 import NersCore
 import Observation
 
@@ -26,8 +27,23 @@ final class AppModel {
         }
     }
 
+    // MARK: Theo dõi cùng
+
+    private(set) var connection: SyncConnection? = ConnectionKeychain.load().flatMap(SyncConnection.init(code:))
+    var shareEnabled: Bool = UserDefaults.standard.object(forKey: "shareEnabled") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(shareEnabled, forKey: "shareEnabled")
+            Task { await sync() }
+        }
+    }
+    private(set) var lastSync: Date? = UserDefaults.standard.object(forKey: "lastSync") as? Date
+    /// Lỗi đồng bộ gần nhất, chỉ hiện trong Cài đặt: mất mạng là chuyện thường, không làm phiền màn Hôm nay.
+    private(set) var syncIssue: String?
+
     private let store: PlanStore
     private let scheduler = ReminderScheduler()
+    private let syncClient = SyncClient()
+    private let network = NWPathMonitor()
 
     init() {
         let directory = URL.applicationSupportDirectory
@@ -41,6 +57,41 @@ final class AppModel {
             try? FileManager.default.moveItem(at: store.url, to: backup)
             planner = Planner()
             dataIssue = "Không đọc được dữ liệu cũ, đã cất vào \(backup.lastPathComponent). App chạy lại từ cài đặt mặc định."
+        }
+        // Có mạng trở lại (xuống máy bay) thì gửi bản mới nhất.
+        network.pathUpdateHandler = { path in
+            guard path.status == .satisfied else { return }
+            Task { @MainActor in await AppModel.shared.sync() }
+        }
+        network.start(queue: .global(qos: .utility))
+    }
+
+    /// Dán mã kết nối từ lệnh /link. Trả `false` nếu mã sai dạng.
+    func connect(code: String) async -> Bool {
+        guard let parsed = SyncConnection(code: code) else { return false }
+        ConnectionKeychain.save(code.trimmingCharacters(in: .whitespacesAndNewlines))
+        connection = parsed
+        await sync()
+        return true
+    }
+
+    func disconnect() {
+        ConnectionKeychain.save(nil)
+        connection = nil
+        syncIssue = nil
+    }
+
+    func sync() async {
+        guard shareEnabled, let connection else { return }
+        do {
+            let reply = try await syncClient.send(planner.snapshot(now: .now), to: connection)
+            message = reply.message
+            UserDefaults.standard.set(reply.message, forKey: "message")
+            lastSync = .now
+            UserDefaults.standard.set(lastSync, forKey: "lastSync")
+            syncIssue = nil
+        } catch {
+            syncIssue = "Chưa đồng bộ được: \(error.localizedDescription) App sẽ gửi lại khi có mạng."
         }
     }
 
@@ -114,5 +165,6 @@ final class AppModel {
             }
         } while syncAgain
         syncing = false
+        await sync()
     }
 }

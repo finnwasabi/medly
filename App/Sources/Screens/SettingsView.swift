@@ -5,6 +5,9 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var pillsSheet = false
     @State private var confirmStopCounting = false
+    @State private var confirmDisconnect = false
+    @State private var code = ""
+    @State private var badCode = false
 
     var body: some View {
         @Bindable var model = model
@@ -68,6 +71,34 @@ struct SettingsView: View {
                     Text("Tắt đếm thì app chỉ nhắc uống mỗi ngày.")
                 }
 
+                Section {
+                    if let connection = model.connection {
+                        Toggle("Chia sẻ với Tùng", isOn: $model.shareEnabled)
+                        LabeledContent("Server", value: connection.endpoint.host() ?? "")
+                        LabeledContent("Đồng bộ gần nhất", value: model.lastSync.map { "\(TodayText.dayTitle($0)), \(TimeFormatting.vietnamTime($0))" } ?? "chưa")
+                        if let issue = model.syncIssue {
+                            Text(issue).foregroundStyle(DoseStatus.missed.foreground)
+                        }
+                        Button("Gỡ kết nối", role: .destructive) { confirmDisconnect = true }
+                    } else {
+                        TextField("Dán mã kết nối", text: $code)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button("Kết nối") {
+                            Task { badCode = !(await model.connect(code: code)) }
+                        }
+                        .disabled(code.isEmpty)
+                        if badCode {
+                            Text("Mã không đúng dạng. Mã bắt đầu bằng https:// và có dấu #.")
+                                .foregroundStyle(DoseStatus.missed.foreground)
+                        }
+                    }
+                } header: {
+                    Text("Theo dõi cùng")
+                } footer: {
+                    Text("Khi có mạng, app gửi trạng thái mới nhất để Tùng xem qua Telegram. Không có mạng thì vẫn nhắc bình thường. Mã kết nối lấy bằng lệnh /link của bot.")
+                }
+
                 Section("Ứng dụng") {
                     LabeledContent("Phiên bản", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                 }
@@ -77,6 +108,11 @@ struct SettingsView: View {
             .tint(Palette.primary)
             .navigationTitle("Cài đặt")
             .sheet(isPresented: $pillsSheet) { PillsSheet() }
+            .confirmationDialog("Gỡ kết nối với Tùng?", isPresented: $confirmDisconnect, titleVisibility: .visible) {
+                Button("Gỡ kết nối", role: .destructive) { model.disconnect() }
+            } message: {
+                Text("App ngừng gửi dữ liệu. Muốn nối lại thì dán lại mã kết nối.")
+            }
             .confirmationDialog("Tắt đếm số viên?", isPresented: $confirmStopCounting, titleVisibility: .visible) {
                 Button("Tắt đếm", role: .destructive) { model.update { $0.settings.pills = nil } }
             } message: {
