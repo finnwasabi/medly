@@ -14,13 +14,25 @@ The reference for the reminder logic and the data contract between the app and t
 - The app schedules the next H days (14) ahead and refills on every launch, every "Taken", undo, settings change, and
   whenever the network comes back.
 
+## Medications
+
+- The user keeps a list of up to 20 **medications**. Each has a name (up to 40 characters, shown in every reminder), a
+  color, an icon, its own schedule, pill count, pauses and history. Everything below applies to each medication on its own.
+- A fresh install has no medications. Data from 0.1.x (a single schedule) becomes one medication named "Daily pill".
+- Medications reminded at the same moment share one alert: one alarm rings, its title names them all ("Vitamin D,
+  Iron"), and "Taken" marks all of them. Taking one medication never stops another one's ringing or snoozed alarm.
+
 ## Schedule and maximum gap
 
-- The user sets a **main time** in Vietnam time (for example 21:00).
-- **Maximum gap** between two consecutive doses: 24 hours by default.
+- The user sets a **main time** in Vietnam time (for example 21:00) and **doses per day**: 1, 2, 3, 4 or 6, evenly
+  spaced. The **period** is 24 hours divided by the doses per day; with 2 doses from 08:00 they fall at 08:00 and 20:00.
+- **Maximum gap** between two consecutive doses: one period by default, adjustable from one period up to one and a half
+  (24 to 36 hours for a daily medication).
 - Next deadline = previous dose + maximum gap.
-- Next reminder = min(the next main time in Vietnam time, the deadline). Taking a dose early pulls the next day
-  earlier too. "Back to the main time" is available and warns when that dose would exceed the maximum gap.
+- A take counts for its nearest dose time; the next dose belongs to the first dose time more than half a period
+  later. Next reminder = min(that dose time, the deadline). Taking a dose early pulls the next one earlier too. "Back to
+  the main time" is available and warns when that dose would exceed the maximum gap. Changing the main time, the doses
+  per day or the maximum gap warns the same way.
 - Reminder chain for each dose, all cancelled by "Taken":
   1. The main reminder.
   2. 3 repeats, 5 minutes apart.
@@ -28,10 +40,12 @@ The reference for the reminder logic and the data contract between the app and t
   4. In the last 2 hours before the deadline: every 15 minutes.
   5. At the deadline: a ringing alarm regardless of the phone's mode.
   6. Past the deadline and still not taken: still ringing. 3 repeats 5 minutes apart, then every 15 minutes for the
-     first 3 hours, then hourly until the end of the late window (12 hours after the deadline).
+     first 3 hours, then hourly until the end of the late window (half a period after the deadline: 12 hours for a
+     daily medication, 6 hours for one taken twice a day).
   Taking the pill at the main time every day puts the deadline on the next main time, so the part after the deadline
   is what keeps reminding until the pill is taken.
-- Snooze rings again after 10 minutes and never moves the deadline.
+- Snooze follows the iPhone Clock app: 9 minutes by default, adjustable from 1 to 15 in Settings. It can be used as
+  often as needed and never moves the deadline. Only "Taken" stops an alarm.
 - "Taken" can be undone for 10 minutes. Taken times can be edited in History.
 - "Pause reminders for N days": no reminders and no misses during the pause. Afterwards the next dose starts from the
   main time.
@@ -44,7 +58,8 @@ The reference for the reminder logic and the data contract between the app and t
 | Status | Meaning | Color |
 |---|---|---|
 | Taken | Confirmed at or before the deadline, with a 15-minute tolerance so seconds or minutes do not count as late. | Green |
-| Late | Taken after the deadline plus tolerance, but within the late window. The next dose counts from it. | Amber |
+| Due | The dose time has come and the deadline has not. Shown on Today only. | Yellow |
+| Late | Taken after the deadline plus tolerance, but within the late window. The next dose counts from it. | Yellow |
 | Missed | No confirmation by the end of the late window. | Red |
 | Made up | A missed dose for which an extra pill was taken later. | Blue |
 | Paused | The dose fell inside a pause. | Grey |
@@ -53,11 +68,11 @@ Statuses always come with a label and an icon, never color alone.
 
 ## Make-up doses
 
-- The Today screen lists missed doses from the last 7 days with a "Mark made up" button.
+- The Today screen lists missed doses of every medication from the last 7 days with a "Mark made up" button.
 - Marking one stores a make-up record linked to that miss. It subtracts a pill when counting and does not change the
   schedule. Each miss can be made up once.
 - A mistaken make-up is deleted in History and the pill is given back.
-- While misses are not made up, every alert carries the line "N missed pills not made up".
+- While misses are not made up, every alert of that medication carries the line "N missed doses not made up".
 - The app never advises whether or how to make up a pill. It points to the leaflet, a doctor or a pharmacist.
 
 ## Pills
@@ -66,7 +81,7 @@ Statuses always come with a label and an icon, never color alone.
 - With it, every "Taken" and every make-up subtracts a pill. "Add pills" adds to both the remaining count and the total.
 - "Refill reminder": on or off, with a threshold (7 by default). At or below the threshold, every alert carries
   "N pills left, time to buy more".
-- `daysTaken` = doses taken since pills were last entered or added (since the start when not counting).
+- `takenCount` = doses taken since pills were last entered or added (since the start when not counting).
 
 ## Sync (offline first)
 
@@ -81,35 +96,46 @@ newest `updatedAt` and answers older ones with 200 and `"stale": true`. Every re
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "name": "Ner",
   "updatedAt": "2026-10-27T14:03:00Z",
-  "lastTakenAt": "2026-10-27T14:03:00Z",
-  "nextDueAt": "2026-10-28T14:00:00Z",
-  "deadlineAt": "2026-10-28T14:03:00Z",
-  "daysTaken": 12,
-  "missedCount": 1,
-  "lateCount": 0,
-  "madeUpCount": 0,
-  "pillsTotal": 28,
-  "pillsRemaining": 16,
-  "refillReminder": { "enabled": true, "daysBefore": 7 },
-  "pausedUntil": null
+  "medications": [
+    {
+      "id": "6F9619FF-8B86-D011-B42D-00C04FC964FF",
+      "name": "Daily pill",
+      "dosesPerDay": 1,
+      "lastTakenAt": "2026-10-27T14:03:00Z",
+      "nextDueAt": "2026-10-28T14:00:00Z",
+      "deadlineAt": "2026-10-28T14:03:00Z",
+      "takenCount": 12,
+      "missedCount": 1,
+      "lateCount": 0,
+      "madeUpCount": 0,
+      "pillsTotal": 28,
+      "pillsRemaining": 16,
+      "refillReminder": { "enabled": true, "daysBefore": 7 },
+      "pausedUntil": null
+    }
+  ]
 }
 ```
 
 - Times are UTC ISO 8601 without fractional seconds. `pillsTotal` and `pillsRemaining` are `null` when not counting.
   `lastTakenAt`, `pausedUntil` and `name` may be `null`. `name` is the user's name from the app, so the bot can use it.
 - `missedCount` counts every miss, including made-up ones. `madeUpCount` counts the made-up ones.
-- Older app versions do not send `lateCount` or `madeUpCount`; the server treats them as 0.
-- `GET /v1/snapshot` (same token) returns the latest snapshot, or 404 when there is none.
+- At most 30 medications per snapshot.
+- Version 1 (0.1.x: the fields of one medication at the top level, with `daysTaken` instead of `takenCount` and no `id`,
+  `name` or `dosesPerDay`) is still accepted and stored as version 2 with one medication.
+- `GET /v1/snapshot` (same token) returns the latest snapshot as version 2, or 404 when there is none.
 
 ## Telegram bot
 
 - A dedicated bot that answers a single configured chat ID only.
-- Messages on real changes: taken, undo, a new late or missed dose, a make-up, a pause, low pills.
-- A 09:00 Vietnam time report every day: days taken, late, missed, made up, pills left, and the last sync.
-  Snapshots older than 24 hours are flagged as not synced since then.
-- `/check` returns the latest status, `/msg <text>` sets the message shown in the app, `/link` returns the connection code.
-- Bot texts are Vietnamese by default, or English with `BOT_LANGUAGE=en`.
+- Messages on real changes, per medication: taken, undo, a new late or missed dose, a make-up, a pause, low pills, a
+  medication added or removed.
+- A 09:00 Vietnam time report every day with one block per medication: last dose, next dose, taken, late, missed, made
+  up, pills left, and the last sync. Snapshots older than 24 hours are flagged as not synced since then.
+- Commands: `/check` (latest status, with a Refresh button), `/msg <text>` (the note shown in the app; without text it
+  shows the current note), `/clearmsg`, `/link` (the connection code, with a Copy button), `/help`, `/start`.
+- Bot texts are English, sent as Telegram HTML with names escaped.
 - All times are shown in Vietnam time. The bot token, API token and chat ID come from environment variables, never the repo.

@@ -5,6 +5,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
+### Added
+- A Meds tab: keep several medications, each with its own name, color, icon, dose time, doses per day (1, 2, 3, 4 or 6), maximum gap, pill count, refill reminder and pause.
+- Reminders name the medication. Medications due at the same moment share one alarm, and one "Taken" covers them all; a "Took all" button appears on Today when several are due.
+- The maximum gap between doses can be changed, from one period up to one and a half (24 to 36 hours for a daily medication).
+- Snooze length in Settings, 1 to 15 minutes. Snooze as often as needed; only "Taken" stops an alarm.
+- History filters by medication.
+- Bot: `/start`, `/help`, `/clearmsg`, a Copy button on `/link`, a Refresh button on `/check` and the morning report, messages when a medication is added or removed, and a command menu and profile descriptions.
+
+### Changed
+- A brand new look: cute neubrutalism with pastel fills, ink outlines and hard shadows, a custom tab bar and a new icon.
+- Snooze defaults to 9 minutes, like the iPhone Clock app.
+- A dose that is due but not past its deadline shows as "Due now" instead of "Late".
+- Taking one medication no longer stops another medication's ringing or snoozed alarm.
+- Snapshots are version 2 with one entry per medication. The server still accepts version 1 from older apps.
+- Bot texts are English only, with HTML formatting. `BOT_LANGUAGE` is gone.
+
 ## [0.1.7] - 2026-10-29
 
 ### Fixed

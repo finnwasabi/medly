@@ -1,0 +1,418 @@
+import NersCore
+import SwiftUI
+
+/// The list of medications. Each one has its own times, doses per day, maximum gap and pill count.
+struct MedsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var editing: Medication?
+    @State private var adding = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L("Thuốc của bạn", "Your meds"))
+                            .font(.largeTitle.weight(.black))
+                            .foregroundStyle(Palette.text)
+                        Text(L("Chạm vào một thuốc để sửa giờ, số lần uống hay số viên.", "Tap one to change its times, doses or pill count."))
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                    .padding(.top, 12)
+                    ForEach(model.medications) { medication in
+                        Button { editing = medication } label: { row(medication) }
+                            .buttonStyle(PressableCardStyle())
+                            .accessibilityHint(L("Sửa thuốc", "Edit medication"))
+                    }
+                    if model.medications.count < Medication.limit {
+                        Button { adding = true } label: { Label(L("Thêm thuốc", "Add medication"), systemImage: "plus") }
+                            .buttonStyle(NeoButtonStyle(fill: Palette.yellow))
+                    } else {
+                        Text(L("Tối đa \(Medication.limit) thuốc.", "Up to \(Medication.limit) medications."))
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                    if model.medications.count > 1 {
+                        Label(L("Thuốc trùng giờ sẽ báo chung một chuông, bấm Đã uống là xong cả hai.", "Meds due at the same time share one alarm, and one tap on Taken covers them all."),
+                              systemImage: "bell.badge.fill")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            }
+            .background(Palette.background)
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(item: $editing) { MedicationEditor(medication: $0) }
+            .sheet(isPresented: $adding) { MedicationEditor(medication: nil) }
+        }
+    }
+
+    private func row(_ medication: Medication) -> some View {
+        let now = Date.now
+        return HStack(spacing: 14) {
+            IconBadge(icon: medication.icon, fill: Palette.surfaceOnFill, size: 50)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(medication.name)
+                    .font(.title3.weight(.black))
+                    .lineLimit(3)
+                Text(medication.scheduleSummary)
+                    .font(.subheadline.weight(.semibold))
+                Text(L("Cách nhau tối đa \(TodayText.duration(medication.settings.maxInterval))", "At most \(TodayText.duration(medication.settings.maxInterval)) apart"))
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Palette.onFillSecondary)
+                HStack(spacing: 6) {
+                    if let pills = medication.settings.pills {
+                        tag(L("còn \(pills.remaining) viên", "\(pills.remaining) left"), icon: "pills")
+                    }
+                    if medication.settings.pausedUntil(now: now) != nil {
+                        tag(L("đang tạm dừng", "paused"), icon: "pause.fill")
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.right")
+                .font(.headline.weight(.black))
+        }
+        .foregroundStyle(Palette.onFill)
+        .card(Swatch.color(medication.color))
+    }
+
+    private func tag(_ text: String, icon: String) -> some View {
+        Label(text, systemImage: icon)
+            .font(.caption.weight(.heavy))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .neo(Palette.surfaceOnFill, radius: 8, shadow: 0)
+    }
+}
+
+/// A whole card that sinks into its shadow while pressed, like the buttons.
+struct PressableCardStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .offset(x: configuration.isPressed ? 2 : 0, y: configuration.isPressed ? 2 : 0)
+            .animation(.snappy(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// Adds or edits one medication. Changes apply on Save, except pausing, which applies right away.
+struct MedicationEditor: View {
+    /// `nil` adds a new medication.
+    let medication: Medication?
+
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var color = 0
+    @State private var icon = Swatch.icons[0]
+    @State private var time = VietnamClock.calendar.date(bySettingHour: 21, minute: 0, second: 0, of: .now)!
+    @State private var dosesPerDay = 1
+    @State private var gapHours = 24
+    @State private var counting = false
+    @State private var startCount = 28
+    @State private var addCount = 0
+    @State private var refillEnabled = true
+    @State private var refillAt = 7
+    @State private var warning: ResetPreview?
+    @State private var confirmDelete = false
+    @State private var loaded = false
+
+    private var live: Medication? { medication.flatMap { model.medication($0.id) } }
+    private var period: Int { 24 / dosesPerDay }
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    preview
+                    section(L("Tên thuốc", "Name"), footer: L("Tên này hiện trên mọi lần nhắc.", "Shown on every reminder.")) {
+                        NeoField(title: L("Ví dụ: Vitamin D", "For example: Vitamin D"), text: $name, limit: Medication.nameLimit)
+                    }
+                    section(L("Màu và biểu tượng", "Color and icon")) { lookPicker }
+                    section(L("Lịch uống", "Schedule"), footer: scheduleFooter) { schedule }
+                    section(L("Số viên", "Pills"), footer: counting ? nil : L("Tắt đếm thì app chỉ nhắc giờ.", "With counting off, the app only reminds you.")) { pills }
+                    if let live { pauseSection(live) }
+                    if medication != nil {
+                        Button(L("Xoá thuốc này", "Delete this medication"), role: .destructive) { confirmDelete = true }
+                            .buttonStyle(NeoButtonStyle(fill: Palette.coral, large: false))
+                    }
+                }
+                .padding(16)
+            }
+            .background(Palette.background)
+            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle(medication == nil ? L("Thêm thuốc", "Add medication") : L("Sửa thuốc", "Edit medication"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(L("Huỷ", "Cancel")) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("Lưu", "Save")) { save(confirmed: false) }
+                        .fontWeight(.heavy)
+                        .disabled(trimmedName.isEmpty)
+                }
+            }
+            .alert(L("Lần tới sẽ cách lần trước quá \(gapHours) giờ", "The next dose will be more than \(gapHours) h after the last one"),
+                   isPresented: Binding(get: { warning != nil }, set: { if !$0 { warning = nil } })) {
+                Button(L("Vẫn lưu", "Save anyway"), role: .destructive) { save(confirmed: true) }
+                Button(L("Sửa lại", "Go back"), role: .cancel) { warning = nil }
+            } message: {
+                if let warning {
+                    Text(L("Lần tới: \(TodayText.relativeDay(warning.dueAt, from: .now)) \(TimeFormatting.vn(warning.dueAt)). Xem tờ hướng dẫn thuốc trước khi giãn khoảng cách.",
+                           "Next dose: \(TodayText.relativeDay(warning.dueAt, from: .now)) \(TimeFormatting.vn(warning.dueAt)). Check the leaflet before stretching the gap."))
+                }
+            }
+            .confirmationDialog(L("Xoá \(trimmedName)?", "Delete \(trimmedName)?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button(L("Xoá", "Delete"), role: .destructive) {
+                    if let medication { model.delete(medication.id) }
+                    dismiss()
+                }
+            } message: {
+                Text(L("Lịch nhắc và lịch sử của thuốc này sẽ mất, không khôi phục được.", "Its reminders and history are deleted for good."))
+            }
+        }
+        .tint(Palette.ink)
+        .onAppear(perform: load)
+    }
+
+    private var preview: some View {
+        HStack(spacing: 14) {
+            IconBadge(icon: icon, fill: Palette.surfaceOnFill, size: 56)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(trimmedName.isEmpty ? L("Thuốc mới", "New medication") : trimmedName)
+                    .font(.title2.weight(.black))
+                    .lineLimit(3)
+                Text(draftSummary)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .foregroundStyle(Palette.onFill)
+        .card(Swatch.color(color))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var draftSummary: String {
+        var draft = Medication(name: name)
+        let parts = VietnamClock.calendar.dateComponents([.hour, .minute], from: time)
+        draft.settings = ReminderSettings(mainHour: parts.hour ?? 21, mainMinute: parts.minute ?? 0, dosesPerDay: dosesPerDay)
+        return draft.scheduleSummary
+    }
+
+    private var lookPicker: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                ForEach(Swatch.colors.indices, id: \.self) { index in
+                    Button { color = index } label: {
+                        Image(systemName: "checkmark")
+                            .font(.headline.weight(.black))
+                            .foregroundStyle(Palette.onFill)
+                            .opacity(color == index ? 1 : 0)
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .neo(Swatch.colors[index], radius: 12, shadow: color == index ? 0 : 2.5)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L("Màu \(index + 1)", "Color \(index + 1)"))
+                    .accessibilityAddTraits(color == index ? .isSelected : [])
+                }
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+                ForEach(Swatch.icons, id: \.self) { symbol in
+                    Button { icon = symbol } label: {
+                        Image(systemName: symbol)
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(icon == symbol ? Palette.onFill : Palette.text)
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .neo(icon == symbol ? Palette.yellow : Palette.surface, radius: 12, shadow: icon == symbol ? 0 : 2.5)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(symbol)
+                    .accessibilityAddTraits(icon == symbol ? .isSelected : [])
+                }
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+    }
+
+    private var schedule: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            NeoRow(title: dosesPerDay == 1 ? L("Giờ uống", "Dose time") : L("Lần đầu trong ngày", "First dose"), detail: L("giờ VN", "VN time")) {
+                DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .environment(\.timeZone, VietnamClock.timeZone)
+            }
+            InkDivider()
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L("Số lần mỗi ngày", "Doses a day"))
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Palette.text)
+                NeoSegmented(options: ReminderSettings.allowedDosesPerDay.map { ($0, "\($0)×") }, selection: Binding(
+                    get: { dosesPerDay },
+                    set: { value in
+                        dosesPerDay = value
+                        gapHours = 24 / value
+                    }))
+                Text(L("Uống lúc \(draftTimes)", "At \(draftTimes)"))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Palette.textSecondary)
+            }
+            InkDivider()
+            NeoRow(title: L("Cách nhau tối đa", "Max gap"), detail: L("giữa hai lần uống", "between two doses")) {
+                NeoStepper(label: L("\(gapHours) giờ", "\(gapHours) h"), value: $gapHours, range: period...(period * 3 / 2))
+            }
+        }
+    }
+
+    private var draftTimes: String {
+        var draft = Medication(name: "")
+        let parts = VietnamClock.calendar.dateComponents([.hour, .minute], from: time)
+        draft.settings = ReminderSettings(mainHour: parts.hour ?? 21, mainMinute: parts.minute ?? 0, dosesPerDay: dosesPerDay)
+        return draft.doseTimes.joined(separator: " · ")
+    }
+
+    private var scheduleFooter: String {
+        L("Luôn theo giờ Việt Nam. Quá \(gapHours) giờ mà chưa uống thì báo thức kêu dồn và tính trễ; uống sớm thì lần sau nhắc sớm theo.",
+          "Always Vietnam time. After \(gapHours) h without a dose, the alarms ring harder and the dose counts as late. Taking it early moves the next reminder earlier.")
+    }
+
+    @ViewBuilder
+    private var pills: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Toggle(L("Đếm số viên", "Count pills"), isOn: $counting)
+                .toggleStyle(NeoToggleStyle())
+            if counting {
+                InkDivider()
+                if let current = live?.settings.pills {
+                    NeoRow(title: L("Còn lại", "Remaining")) {
+                        Text(L("\(current.remaining)/\(current.total) viên", "\(current.remaining)/\(current.total) pills"))
+                            .font(.body.weight(.heavy).monospacedDigit())
+                            .foregroundStyle(Palette.text)
+                    }
+                    NeoRow(title: L("Thêm viên", "Add pills"), detail: L("mua vỉ mới thì cộng vào đây", "after buying a new pack")) {
+                        NeoStepper(label: "+\(addCount)", value: $addCount, range: 0...200)
+                    }
+                } else {
+                    NeoRow(title: L("Đang có", "You have"), detail: L("mỗi lần uống trừ một viên", "each dose subtracts one")) {
+                        NeoStepper(label: L("\(startCount) viên", "\(startCount) pills"), value: $startCount, range: 1...200)
+                    }
+                }
+                InkDivider()
+                Toggle(L("Nhắc mua thêm", "Refill reminder"), isOn: $refillEnabled)
+                    .toggleStyle(NeoToggleStyle())
+                if refillEnabled {
+                    NeoRow(title: L("Nhắc khi còn", "Remind at")) {
+                        NeoStepper(label: L("\(refillAt) viên", "\(refillAt) pills"), value: $refillAt, range: 1...60)
+                    }
+                }
+            } else if live?.settings.pills != nil {
+                Callout(text: L("Lưu thì số viên đang đếm sẽ mất. Lịch sử uống vẫn giữ.", "Saving drops the current pill count. Your history stays."),
+                        icon: "exclamationmark.triangle.fill", fill: Palette.yellow)
+            }
+        }
+    }
+
+    private func pauseSection(_ live: Medication) -> some View {
+        section(L("Tạm dừng", "Pause"), footer: L("Trong lúc tạm dừng không nhắc và không tính hụt. Áp dụng ngay, không cần bấm Lưu.",
+                                                 "No reminders and no misses during a pause. Applies right away, no need to save.")) {
+            if let until = live.settings.pausedUntil(now: .now) {
+                NeoRow(title: L("Đang tạm dừng tới", "Paused until"), detail: "\(TodayText.dayTitle(until)), \(TimeFormatting.vn(until))") {
+                    Button(L("Nhắc lại ngay", "Resume")) { model.update(live.id) { $0.planner.resume(now: .now) } }
+                        .buttonStyle(ChipButtonStyle(fill: Palette.mint))
+                }
+            } else {
+                HStack(spacing: 10) {
+                    ForEach([1, 3, 7], id: \.self) { days in
+                        Button(L("\(days) ngày", days == 1 ? "1 day" : "\(days) days")) { model.update(live.id) { $0.planner.pause(days: days, now: .now) } }
+                            .buttonStyle(ChipButtonStyle())
+                    }
+                }
+            }
+        }
+    }
+
+    private func section<Content: View>(_ title: String, footer: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline.weight(.black))
+                .foregroundStyle(Palette.text)
+                .accessibilityAddTraits(.isHeader)
+            content()
+                .card()
+            if let footer {
+                Text(footer)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Palette.textSecondary)
+            }
+        }
+    }
+
+    private func load() {
+        guard !loaded else { return }
+        loaded = true
+        guard let medication else {
+            color = model.nextColor
+            return
+        }
+        let s = medication.settings
+        name = medication.name
+        color = medication.color
+        icon = medication.icon
+        time = VietnamClock.calendar.date(bySettingHour: s.mainHour, minute: s.mainMinute, second: 0, of: .now)!
+        dosesPerDay = s.dosesPerDay
+        gapHours = Int((s.maxInterval / 3600).rounded())
+        counting = s.pills != nil
+        refillEnabled = s.refillReminder.enabled
+        refillAt = s.refillReminder.daysBefore
+    }
+
+    private func save(confirmed: Bool) {
+        let parts = VietnamClock.calendar.dateComponents([.hour, .minute], from: time)
+        let hour = parts.hour ?? 21, minute = parts.minute ?? 0
+        let now = Date.now
+        let refill = RefillReminder(enabled: refillEnabled, daysBefore: refillAt)
+        func apply(_ medication: inout Medication) {
+            medication.name = String(trimmedName.prefix(Medication.nameLimit))
+            medication.color = color
+            medication.icon = icon
+            let s = medication.settings
+            if s.mainHour != hour || s.mainMinute != minute || s.dosesPerDay != dosesPerDay {
+                medication.planner.changeSchedule(hour: hour, minute: minute, dosesPerDay: dosesPerDay, now: now)
+            }
+            let range = medication.settings.maxIntervalRange
+            medication.settings.maxInterval = min(max(TimeInterval(gapHours * 3600), range.lowerBound), range.upperBound)
+            if !counting {
+                medication.settings.pills = nil
+            } else if medication.settings.pills == nil {
+                medication.planner.addPills(startCount, now: now)
+            } else if addCount > 0 {
+                medication.planner.addPills(addCount, now: now)
+            }
+            medication.settings.refillReminder = refill
+        }
+        if let live {
+            let s = live.settings
+            let timing = s.mainHour != hour || s.mainMinute != minute || s.dosesPerDay != dosesPerDay || Int((s.maxInterval / 3600).rounded()) != gapHours
+            if !confirmed && timing {
+                var copy = live
+                apply(&copy)
+                let dose = copy.planner.currentDose(now: now)
+                if dose.exceedsMaxInterval {
+                    warning = ResetPreview(dueAt: dose.dueAt, deadlineAt: dose.deadlineAt, exceedsMaxInterval: true)
+                    return
+                }
+            }
+            model.update(live.id, apply)
+        } else {
+            var medication = Medication(name: trimmedName, color: color, icon: icon,
+                                        settings: ReminderSettings(mainHour: hour, mainMinute: minute, dosesPerDay: dosesPerDay))
+            apply(&medication)
+            model.add(medication)
+        }
+        dismiss()
+    }
+}
+
+#Preview { MedsView().environment(AppModel.shared) }

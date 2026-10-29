@@ -13,14 +13,11 @@ struct OnboardingView: View {
         FullScreenScroll {
             VStack(spacing: 24) {
                 Spacer()
-                Image(systemName: "alarm.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(Palette.primary)
-                    .frame(width: 128, height: 128)
-                    .background(Palette.primarySoft, in: Circle())
+                IconBadge(icon: "alarm.fill", fill: Palette.pink, size: 112)
+                    .rotationEffect(.degrees(-4))
                 VStack(spacing: 12) {
-                    Text(L("Nhắc uống thuốc đúng giờ", "Take your pill on time"))
-                        .font(.title.bold())
+                    Text(L("Nhắc uống thuốc đúng giờ", "Take your meds on time"))
+                        .font(.largeTitle.weight(.black))
                         .foregroundStyle(Palette.text)
                         .multilineTextAlignment(.center)
                     Text(L("Ner's Daily đặt báo thức theo giờ Việt Nam, kêu cả khi máy đang im lặng hay bật Focus.", "Ner's Daily sets alarms on Vietnam time that ring even when the phone is on silent or in Focus."))
@@ -33,7 +30,8 @@ struct OnboardingView: View {
                     point(icon: "bell.and.waves.left.and.right.fill", text: L("Nhắc lại tới khi bạn bấm Đã uống", "Keeps reminding until you tap Taken"))
                     point(icon: "airplane", text: L("Không cần mạng, chế độ máy bay vẫn nhắc", "No internet needed, works in airplane mode"))
                 }
-                .card()
+                .foregroundStyle(Palette.onFill)
+                .card(Palette.yellow)
                 Spacer()
                 Button(L("Cho phép báo thức", "Allow alarms")) {
                     asking = true
@@ -45,7 +43,7 @@ struct OnboardingView: View {
                         onFinish()
                     }
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(NeoButtonStyle())
                 .disabled(asking)
                 Text(L("Máy sẽ hỏi hai lần: báo thức và thông báo.", "Your phone asks twice: alarms and notifications."))
                     .font(.footnote)
@@ -60,12 +58,10 @@ struct OnboardingView: View {
     private func point(icon: String, text: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(Palette.primary)
+                .font(.title3.weight(.bold))
                 .frame(width: 28)
             Text(text)
-                .font(.body)
-                .foregroundStyle(Palette.text)
+                .font(.body.weight(.semibold))
         }
     }
 }

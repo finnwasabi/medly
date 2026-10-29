@@ -12,7 +12,7 @@ public struct Medication: Codable, Equatable, Identifiable, Sendable {
     public var history: [DoseRecord]
 
     /// Long names would push alarm titles past what the lock screen shows.
-    public static let nameLimit = 30
+    public static let nameLimit = 40
     /// More than this would crowd the alarm budget and the server snapshot.
     public static let limit = 20
 

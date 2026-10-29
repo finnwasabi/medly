@@ -37,6 +37,12 @@ public struct ResetPreview: Equatable, Sendable {
     public var deadlineAt: Date
     /// True when that dose would be further than the maximum gap from the previous one; the app must warn.
     public var exceedsMaxInterval: Bool
+
+    public init(dueAt: Date, deadlineAt: Date, exceedsMaxInterval: Bool) {
+        self.dueAt = dueAt
+        self.deadlineAt = deadlineAt
+        self.exceedsMaxInterval = exceedsMaxInterval
+    }
 }
 
 /// Computes the schedule from settings and history. Never reads the clock; `now` is always a parameter.
@@ -109,15 +115,6 @@ public struct Planner: Sendable {
     /// Status of each past Vietnam day (keyed by the start of the day), for the calendar and the week strip.
     /// A day with several records takes the worst status: missed, made up, late, taken, paused.
     public func dayStatuses(now: Date) -> [Date: DoseStatus] {
-        func rank(_ status: DoseStatus) -> Int {
-            switch status {
-            case .missed: 4
-            case .madeUp: 3
-            case .late: 2
-            case .taken: 1
-            case .paused: 0
-            }
-        }
         var result: [Date: DoseStatus] = [:]
         for record in timeline(now: now) {
             // Each record belongs to its nearest main time, the same rule that picks the next dose after a take.
@@ -126,7 +123,7 @@ public struct Planner: Sendable {
             let moment = record.status == .madeUp || record.status == .late ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
             let slot = firstSlot(after: moment.addingTimeInterval(-halfPeriod))
             let day = VietnamClock.calendar.startOfDay(for: slot)
-            if let existing = result[day], rank(existing) >= rank(record.status) { continue }
+            if let existing = result[day], existing.severity >= record.status.severity { continue }
             result[day] = record.status
         }
         return result

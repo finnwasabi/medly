@@ -19,7 +19,8 @@ struct DoseAlarmLiveActivity: Widget {
                     .foregroundStyle(context.attributes.tintColor)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title(context.state, context.attributes.metadata))
-                        .font(.headline)
+                        .font(.headline.weight(.heavy))
+                        .lineLimit(2)
                     Text("Ner's Daily")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -58,10 +59,11 @@ struct DoseAlarmLiveActivity: Widget {
 
     private func title(_ state: AlarmPresentationState, _ metadata: DoseAlarmMetadata?) -> String {
         let en = metadata?.language == "en"
+        let names = metadata?.names.isEmpty == false ? metadata!.names : (en ? "your pill" : "thuốc")
         switch state.mode {
-        case .countdown: return en ? "Pill snoozed" : "Đang hoãn uống thuốc"
+        case .countdown: return en ? "Snoozed: \(names)" : "Đang hoãn: \(names)"
         case .paused: return en ? "Snooze paused" : "Đã dừng hoãn"
-        default: return en ? "Time to take your pill" : "Tới giờ uống thuốc"
+        default: return en ? "Time to take \(names)" : "Tới giờ uống \(names)"
         }
     }
 

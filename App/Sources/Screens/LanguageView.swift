@@ -9,26 +9,23 @@ struct LanguageView: View {
         FullScreenScroll {
             VStack(spacing: 24) {
                 Spacer()
-                Image(systemName: "globe")
-                    .font(.system(size: 56))
-                    .foregroundStyle(Palette.primary)
-                    .frame(width: 120, height: 120)
-                    .background(Palette.primarySoft, in: Circle())
+                IconBadge(icon: "globe.asia.australia.fill", fill: Palette.sky, size: 112)
+                    .rotationEffect(.degrees(-4))
                 VStack(spacing: 8) {
                     Text("Chọn ngôn ngữ")
-                        .font(.title.bold())
+                        .font(.largeTitle.weight(.black))
                     Text("Choose your language")
-                        .font(.title3)
+                        .font(.title3.weight(.bold))
                         .foregroundStyle(Palette.textSecondary)
                 }
                 .foregroundStyle(Palette.text)
                 Spacer()
                 Button("Tiếng Việt") { onChoose(.vi) }
-                    .buttonStyle(PrimaryButtonStyle())
+                    .buttonStyle(NeoButtonStyle())
                 Button("English") { onChoose(.en) }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .buttonStyle(NeoButtonStyle(fill: Palette.yellow))
                 Text("Đổi được trong Cài đặt. You can change it in Settings.")
-                    .font(.footnote)
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(Palette.textSecondary)
                     .multilineTextAlignment(.center)
             }

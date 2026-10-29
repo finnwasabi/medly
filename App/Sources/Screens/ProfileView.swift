@@ -16,11 +16,8 @@ struct ProfileView: View {
         FullScreenScroll {
             VStack(spacing: 24) {
                 Spacer()
-                Image(systemName: step == 0 ? "person.crop.circle.fill" : "heart.circle.fill")
-                    .font(.system(size: 56))
-                    .foregroundStyle(Palette.primary)
-                    .frame(width: 120, height: 120)
-                    .background(Palette.primarySoft, in: Circle())
+                IconBadge(icon: step == 0 ? "face.smiling.inverse" : "heart.fill", fill: step == 0 ? Palette.yellow : Palette.pink, size: 112)
+                    .rotationEffect(.degrees(step == 0 ? -4 : 4))
                 if step == 0 { nameStep } else { partnerStep }
                 Spacer()
                 buttons
@@ -35,11 +32,11 @@ struct ProfileView: View {
     private var nameStep: some View {
         VStack(spacing: 12) {
             Text(L("Bạn tên gì?", "What's your name?"))
-                .font(.title.bold())
+                .font(.largeTitle.weight(.black))
                 .foregroundStyle(Palette.text)
                 .multilineTextAlignment(.center)
             Text(L("App dùng tên này để chào bạn.", "The app uses it to greet you."))
-                .font(.body)
+                .font(.body.weight(.medium))
                 .foregroundStyle(Palette.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.bottom, 8)
@@ -54,12 +51,12 @@ struct ProfileView: View {
     private var partnerStep: some View {
         VStack(spacing: 12) {
             Text(L("Thêm partner theo dõi cùng?", "Add a partner to follow along?"))
-                .font(.title.bold())
+                .font(.largeTitle.weight(.black))
                 .foregroundStyle(Palette.text)
                 .multilineTextAlignment(.center)
-            Text(L("Partner xem được bạn đã uống chưa qua Telegram và gửi lời nhắn vào app. Để sau cũng được, trong Cài đặt.",
-                   "Your partner can see on Telegram whether you have taken your pill and send you messages in the app. You can also do this later in Settings."))
-                .font(.body)
+            Text(L("Partner xem được bạn đã uống thuốc chưa qua Telegram và gửi lời nhắn vào app. Để sau cũng được, trong Cài đặt.",
+                   "Your partner can see on Telegram whether you have taken your meds and send you messages in the app. You can also do this later in Settings."))
+                .font(.body.weight(.medium))
                 .foregroundStyle(Palette.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.bottom, 8)
@@ -71,25 +68,20 @@ struct ProfileView: View {
             if badCode {
                 Text(L("Mã không đúng dạng. Mã bắt đầu bằng https:// và có dấu #.", "Invalid code. It starts with https:// and contains #."))
                     .font(.footnote)
-                    .foregroundStyle(DoseStatus.missed.foreground)
+                    .foregroundStyle(Palette.text)
             }
         }
     }
 
     private func field(_ title: String, text: Binding<String>, limit: Int = AppModel.nameLimit) -> some View {
-        TextField(title, text: Binding(get: { text.wrappedValue }, set: { text.wrappedValue = String($0.prefix(limit)) }))
-            .font(.body)
-            .padding(.horizontal, 16)
-            .frame(minHeight: 52)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.border))
+        NeoField(title: title, text: text, limit: limit)
     }
 
     @ViewBuilder
     private var buttons: some View {
         if step == 0 {
             Button(L("Tiếp tục", "Continue"), action: next)
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(NeoButtonStyle())
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
         } else {
             Button(L("Lưu", "Save")) {
@@ -101,10 +93,10 @@ struct ProfileView: View {
                     onFinish()
                 }
             }
-            .buttonStyle(PrimaryButtonStyle())
+            .buttonStyle(NeoButtonStyle())
             .disabled(partner.trimmingCharacters(in: .whitespaces).isEmpty && code.isEmpty)
             Button(L("Bỏ qua", "Skip"), action: onFinish)
-                .buttonStyle(SecondaryButtonStyle())
+                .buttonStyle(NeoButtonStyle(fill: Palette.surfaceOnFill, large: false))
         }
     }
 
