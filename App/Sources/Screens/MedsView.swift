@@ -8,7 +8,7 @@ struct MedsView: View {
     @State private var adding = false
 
     var body: some View {
-        NavigationStack {
+        Group {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -44,7 +44,6 @@ struct MedsView: View {
                 .padding(.bottom, 24)
             }
             .background(Palette.background)
-            .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $editing) { MedicationEditor(medication: $0) }
             .sheet(isPresented: $adding) { MedicationEditor(medication: nil) }
         }
@@ -112,8 +111,12 @@ struct MedicationEditor: View {
     @State private var dosesPerDay = 1
     @State private var gapHours = 24
     @State private var counting = false
-    @State private var startCount = 28
-    @State private var addCount = 0
+    @State private var startCount = PillCounter.defaultPackSize
+    @State private var packSize = PillCounter.defaultPackSize
+    /// The remaining count as edited, and as it was when the editor opened. Save applies the difference, so a dose
+    /// taken from an alarm while the editor is open is not undone.
+    @State private var remaining = 0
+    @State private var remainingAtOpen = 0
     @State private var refillEnabled = true
     @State private var refillAt = 7
     @State private var warning: ResetPreview?
@@ -148,6 +151,12 @@ struct MedicationEditor: View {
             .navigationTitle(medication == nil ? L("Thêm thuốc", "Add medication") : L("Sửa thuốc", "Edit medication"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // The number pad has no return key.
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(L("Xong", "Done")) { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+                        .fontWeight(.heavy)
+                }
                 ToolbarItem(placement: .cancellationAction) { Button(L("Huỷ", "Cancel")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L("Lưu", "Save")) { save(confirmed: false) }
@@ -176,6 +185,7 @@ struct MedicationEditor: View {
         }
         .tint(Palette.ink)
         .onAppear(perform: load)
+        .onChange(of: packSize) { old, new in if startCount == old { startCount = new } }
     }
 
     private var preview: some View {
@@ -260,8 +270,9 @@ struct MedicationEditor: View {
                     .foregroundStyle(Palette.textSecondary)
             }
             InkDivider()
-            NeoRow(title: L("Cách nhau tối đa", "Max gap"), detail: L("giữa hai lần uống", "between two doses")) {
-                NeoStepper(label: L("\(gapHours) giờ", "\(gapHours) h"), value: $gapHours, range: period...(period * 3 / 2))
+            // The gap cannot be shorter than the time between two doses, or every dose would drift earlier.
+            NeoRow(title: L("Cách nhau tối đa", "Max gap"), detail: L("từ \(period) tới \(period * 3 / 2) giờ", "\(period) to \(period * 3 / 2) h")) {
+                NeoStepper(value: $gapHours, range: period...(period * 3 / 2), unit: L("giờ", "h"))
             }
         }
     }
@@ -274,8 +285,8 @@ struct MedicationEditor: View {
     }
 
     private var scheduleFooter: String {
-        L("Luôn theo giờ Việt Nam. Quá \(gapHours) giờ mà chưa uống thì báo thức kêu dồn và tính trễ; uống sớm thì lần sau nhắc sớm theo.",
-          "Always Vietnam time. After \(gapHours) h without a dose, the alarms ring harder and the dose counts as late. Taking it early moves the next reminder earlier.")
+        L("Luôn theo giờ Việt Nam. Quá \(gapHours) giờ mà chưa uống thì báo thức kêu dồn và tính trễ; uống sớm thì lần sau nhắc sớm theo. Ngắn nhất là \(period) giờ, bằng khoảng giữa hai lần uống, vì ngắn hơn thì mỗi lần sẽ bị kéo sớm dần.",
+          "Always Vietnam time. After \(gapHours) h without a dose, the alarms ring harder and the dose counts as late. Taking it early moves the next reminder earlier. The shortest is \(period) h, the time between two doses, since anything shorter would pull every dose a little earlier.")
     }
 
     @ViewBuilder
@@ -285,18 +296,27 @@ struct MedicationEditor: View {
                 .toggleStyle(NeoToggleStyle())
             if counting {
                 InkDivider()
-                if let current = live?.settings.pills {
-                    NeoRow(title: L("Còn lại", "Remaining")) {
-                        Text(L("\(current.remaining)/\(current.total) viên", "\(current.remaining)/\(current.total) pills"))
-                            .font(.body.weight(.heavy).monospacedDigit())
-                            .foregroundStyle(Palette.text)
+                NeoRow(title: L("Mỗi vỉ có", "Pills per pack"), detail: L("dùng cho nút thêm 1 vỉ", "used by Add a pack")) {
+                    NeoStepper(value: $packSize, range: 1...200, unit: L("viên", "pills"), editable: true)
+                }
+                if live?.settings.pills != nil {
+                    NeoRow(title: L("Còn lại", "Remaining"), detail: L("gõ số hoặc giữ nút để chỉnh nhanh", "type it, or hold a button")) {
+                        NeoStepper(value: $remaining, range: 0...999, unit: L("viên", "pills"), editable: true)
                     }
-                    NeoRow(title: L("Thêm viên", "Add pills"), detail: L("mua vỉ mới thì cộng vào đây", "after buying a new pack")) {
-                        NeoStepper(label: "+\(addCount)", value: $addCount, range: 0...200)
+                    Button { remaining = min(999, remaining + packSize) } label: {
+                        Label(L("Thêm 1 vỉ (\(packSize) viên)", "Add a pack (\(packSize) pills)"), systemImage: "plus")
+                    }
+                    .buttonStyle(ChipButtonStyle(fill: Palette.mint))
+                    if remaining != remainingAtOpen {
+                        Text(remaining > remainingAtOpen
+                             ? L("Lưu để thêm \(remaining - remainingAtOpen) viên.", "Save to add \(remaining - remainingAtOpen) pills.")
+                             : L("Lưu để bớt \(remainingAtOpen - remaining) viên.", "Save to remove \(remainingAtOpen - remaining) pills."))
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(Palette.textSecondary)
                     }
                 } else {
                     NeoRow(title: L("Đang có", "You have"), detail: L("mỗi lần uống trừ một viên", "each dose subtracts one")) {
-                        NeoStepper(label: L("\(startCount) viên", "\(startCount) pills"), value: $startCount, range: 1...200)
+                        NeoStepper(value: $startCount, range: 1...999, unit: L("viên", "pills"), editable: true)
                     }
                 }
                 InkDivider()
@@ -304,7 +324,7 @@ struct MedicationEditor: View {
                     .toggleStyle(NeoToggleStyle())
                 if refillEnabled {
                     NeoRow(title: L("Nhắc khi còn", "Remind at")) {
-                        NeoStepper(label: L("\(refillAt) viên", "\(refillAt) pills"), value: $refillAt, range: 1...60)
+                        NeoStepper(value: $refillAt, range: 1...60, unit: L("viên", "pills"), editable: true)
                     }
                 }
             } else if live?.settings.pills != nil {
@@ -325,7 +345,7 @@ struct MedicationEditor: View {
             } else {
                 HStack(spacing: 10) {
                     ForEach([1, 3, 7], id: \.self) { days in
-                        Button(L("\(days) ngày", days == 1 ? "1 day" : "\(days) days")) { model.update(live.id) { $0.planner.pause(days: days, now: .now) } }
+                        Button(L("\(days) ngày", days == 1 ? "1 day" : "\(days) days")) { model.update(live.id, stopsAlarms: true) { $0.planner.pause(days: days, now: .now) } }
                             .buttonStyle(ChipButtonStyle())
                     }
                 }
@@ -364,6 +384,12 @@ struct MedicationEditor: View {
         dosesPerDay = s.dosesPerDay
         gapHours = Int((s.maxInterval / 3600).rounded())
         counting = s.pills != nil
+        if let pills = s.pills {
+            packSize = pills.pack
+            startCount = pills.pack
+            remaining = pills.remaining
+            remainingAtOpen = pills.remaining
+        }
         refillEnabled = s.refillReminder.enabled
         refillAt = s.refillReminder.daysBefore
     }
@@ -386,9 +412,12 @@ struct MedicationEditor: View {
             if !counting {
                 medication.settings.pills = nil
             } else if medication.settings.pills == nil {
-                medication.planner.addPills(startCount, now: now)
-            } else if addCount > 0 {
-                medication.planner.addPills(addCount, now: now)
+                medication.settings.pills = PillCounter(count: startCount, at: now, packSize: packSize)
+            } else {
+                if remaining != remainingAtOpen, let current = medication.settings.pills?.remaining {
+                    medication.settings.pills?.setRemaining(current + remaining - remainingAtOpen, at: now)
+                }
+                medication.settings.pills?.packSize = packSize
             }
             medication.settings.refillReminder = refill
         }
@@ -405,12 +434,13 @@ struct MedicationEditor: View {
                 }
             }
             model.update(live.id, apply)
-        } else {
+        } else if medication == nil {
             var medication = Medication(name: trimmedName, color: color, icon: icon,
                                         settings: ReminderSettings(mainHour: hour, mainMinute: minute, dosesPerDay: dosesPerDay))
             apply(&medication)
             model.add(medication)
         }
+        // An existing medication deleted while its editor was open is not brought back.
         dismiss()
     }
 }

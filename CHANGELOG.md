@@ -5,7 +5,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-29
+
+### Added
+- Appearance in Settings: follow the phone, light or dark.
+- Pills per pack for each medication. "Add a pack" adds that many, and starting to count suggests one pack.
+- Number steppers repeat while held, and pill counts can be typed. The remaining count can be corrected down as well as up.
+
+### Changed
+- Outlines are slightly thinner, and small elements (chips, pills, calendar days) use a thinner line than cards.
+- The maximum gap row shows its range, and the footer explains why it cannot be shorter than the time between doses.
+- Pausing a medication also stops its ringing or snoozed alarm.
+
 ### Fixed
+- Tapping the snooze stepper crashed the app.
+- The end of every screen stayed hidden under the tab bar on 6.1 inch iPhones.
+- A medication deleted while its editor was open came back on Save.
 - Server: calls to Telegram no longer fail about half the time on hosts without IPv6, and setting the command menu is retried.
 
 ## [0.2.0] - 2026-10-29

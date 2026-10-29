@@ -14,7 +14,7 @@ struct TodayView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        Group {
             // Redraws every minute for the countdowns. Uses the real time, not `context.date` (the start of the minute),
             // otherwise a dose taken a moment ago lies after `now` and is ignored.
             TimelineView(.everyMinute) { _ in
@@ -39,7 +39,6 @@ struct TodayView: View {
                 }
             }
             .background(Palette.background)
-            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $addingMedication) { MedicationEditor(medication: nil) }
             .sensoryFeedback(.success, trigger: tapped)
         }

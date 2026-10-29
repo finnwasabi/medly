@@ -25,6 +25,7 @@ struct NersDailyApp: App {
                 .environment(model)
                 .environment(\.locale, AppLanguage.locale)
                 .fontDesign(.rounded)
+                .preferredColorScheme(model.theme.colorScheme)
         }
         .onChange(of: scenePhase) { _, phase in
             // Opening the app refills the reminders for the next H days.

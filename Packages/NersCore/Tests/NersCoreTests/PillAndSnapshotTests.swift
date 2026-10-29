@@ -156,3 +156,34 @@ import Testing
         #expect(planner.history.count == 30)
     }
 }
+
+@Suite struct PackSizeTests {
+    @Test func firstCountIsThePackUnlessGiven() {
+        #expect(PillCounter(count: 21, at: vn(2026, 10, 1, 8)).pack == 21)
+        #expect(PillCounter(count: 30, at: vn(2026, 10, 1, 8), packSize: 28).pack == 28)
+        #expect(PillCounter(count: 0, at: vn(2026, 10, 1, 8)).pack == PillCounter.defaultPackSize)
+    }
+
+    @Test func olderDataWithoutPackSizeDecodes() throws {
+        let json = #"{"total": 28, "remaining": 9, "countingSince": 0}"#
+        let pills = try JSONDecoder().decode(PillCounter.self, from: Data(json.utf8))
+        #expect(pills.packSize == nil)
+        #expect(pills.pack == 28)
+        #expect(pills.remaining == 9)
+    }
+
+    @Test func raisingRemainingAddsPillsAndLoweringOnlyCorrects() {
+        var pills = PillCounter(count: 28, at: vn(2026, 10, 1, 8))
+        _ = pills.consume()
+        pills.setRemaining(27 + 28, at: vn(2026, 10, 20, 8))
+        #expect(pills.remaining == 55)
+        #expect(pills.total == 56)
+        #expect(pills.countingSince == vn(2026, 10, 20, 8))
+        pills.setRemaining(50, at: vn(2026, 10, 21, 8))
+        #expect(pills.remaining == 50)
+        #expect(pills.total == 56)
+        #expect(pills.countingSince == vn(2026, 10, 20, 8))
+        pills.setRemaining(-3, at: vn(2026, 10, 21, 8))
+        #expect(pills.remaining == 0)
+    }
+}
