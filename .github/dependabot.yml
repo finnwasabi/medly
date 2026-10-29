@@ -1,0 +1,7 @@
+# The project has no third-party dependencies today; this keeps GitHub Actions current if any get added.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

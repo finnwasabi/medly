@@ -1,10 +1,11 @@
-# Chạy test logic (NersCore) và test server cho mỗi PR và mỗi lần đẩy lên main.
+# Chạy test NersCore, test server và build .ipa cho mỗi PR và mỗi lần đẩy lên main hay develop.
+# Tên job `test` là status check bắt buộc của ruleset nhánh, đổi tên thì sửa cả ruleset.
 name: CI
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   contents: read
