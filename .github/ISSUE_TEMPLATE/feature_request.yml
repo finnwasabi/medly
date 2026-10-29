@@ -16,3 +16,8 @@ body:
       description: What would you like the app to do?
     validations:
       required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Optional. Workarounds or other approaches you considered.

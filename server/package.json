@@ -1,8 +1,17 @@
 {
   "name": "ners-daily-server",
+  "description": "Sync service and private Telegram bot for Ner's Daily",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/finnwasabi/ners-daily.git",
+    "directory": "server"
+  },
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node server.js",
     "test": "node --test"

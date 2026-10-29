@@ -6,4 +6,4 @@ In short: be kind and patient, assume good intent, keep discussions about the wo
 This is a health-related app, so never ask for or share anyone's real health data.
 
 Report unacceptable behavior privately to the maintainer through GitHub (**Security > Report a vulnerability** also works for this).
-Reports are handled confidentially.
+Reports are handled confidentially, and the maintainer may remove comments, issues or contributions that break these rules.
