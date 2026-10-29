@@ -140,12 +140,9 @@ struct HistoryView: View {
                     .padding(.vertical, 10)
             }
             ForEach(records) { record in
-                let editable = record.takenAt != nil
-                Button {
-                    if editable { editing = record }
-                } label: {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
+                // Lần hụt hay tạm dừng không sửa được: không bọc nút, để chữ không bị làm mờ như nút tắt.
+                let row = HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
                             Text(TodayText.dayTitle(record.status == .madeUp ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)))
                                 .font(.body.weight(.medium))
                                 .foregroundStyle(Palette.text)
@@ -158,9 +155,13 @@ struct HistoryView: View {
                     }
                     .padding(.vertical, 10)
                     .contentShape(Rectangle())
+                if record.takenAt != nil {
+                    Button { editing = record } label: { row }
+                        .buttonStyle(.plain)
+                        .accessibilityHint(L("Sửa giờ uống", "Edit time"))
+                } else {
+                    row
                 }
-                .buttonStyle(.plain)
-                .disabled(!editable)
                 if record.id != records.last?.id { Divider() }
             }
             Text(L("Chạm vào một lần uống để sửa giờ.", "Tap a dose to edit its time."))

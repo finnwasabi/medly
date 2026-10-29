@@ -15,6 +15,18 @@ struct SettingsView: View {
         let now = Date.now
         NavigationStack {
             Form {
+                Section(L("Tên", "Names")) {
+                    LabeledContent(L("Tên bạn", "Your name")) {
+                        TextField(L("Nhập tên", "Enter name"), text: $model.userName)
+                            .textContentType(.givenName)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    LabeledContent(L("Partner", "Partner")) {
+                        TextField(L("Tuỳ chọn", "Optional"), text: $model.partnerName)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+
                 Section {
                     DatePicker(L("Giờ uống (giờ VN)", "Pill time (VN time)"), selection: mainTime, displayedComponents: .hourAndMinute)
                         .environment(\.timeZone, VietnamClock.timeZone)
@@ -73,7 +85,7 @@ struct SettingsView: View {
 
                 Section {
                     if let connection = model.connection {
-                        Toggle(L("Chia sẻ với Tùng", "Share with Tùng"), isOn: $model.shareEnabled)
+                        Toggle(L("Chia sẻ với \(model.partner)", "Share with \(model.partner)"), isOn: $model.shareEnabled)
                         LabeledContent("Server", value: connection.endpoint.host() ?? "")
                         LabeledContent(L("Đồng bộ gần nhất", "Last sync"), value: model.lastSync.map { "\(TodayText.dayTitle($0)), \(TimeFormatting.vn($0))" } ?? L("chưa", "never"))
                         if let issue = model.syncIssue {
@@ -96,7 +108,7 @@ struct SettingsView: View {
                 } header: {
                     Text(L("Theo dõi cùng", "Shared tracking"))
                 } footer: {
-                    Text(L("Khi có mạng, app gửi trạng thái mới nhất để Tùng xem qua Telegram. Không có mạng thì vẫn nhắc bình thường. Mã kết nối lấy bằng lệnh /link của bot.", "When online, the app sends the latest status so Tùng can follow it on Telegram. Offline, reminders work as usual. Get the connection code with the bot's /link command."))
+                    Text(L("Khi có mạng, app gửi trạng thái mới nhất để \(model.partner) xem qua Telegram. Không có mạng thì vẫn nhắc bình thường. Mã kết nối lấy bằng lệnh /link của bot.", "When online, the app sends the latest status so \(model.partner) can follow it on Telegram. Offline, reminders work as usual. Get the connection code with the bot's /link command."))
                 }
 
                 Section(L("Ứng dụng", "App")) {
@@ -112,7 +124,7 @@ struct SettingsView: View {
             .tint(Palette.primary)
             .navigationTitle(L("Cài đặt", "Settings"))
             .sheet(isPresented: $pillsSheet) { PillsSheet() }
-            .confirmationDialog(L("Gỡ kết nối với Tùng?", "Disconnect from Tùng?"), isPresented: $confirmDisconnect, titleVisibility: .visible) {
+            .confirmationDialog(L("Gỡ kết nối với \(model.partner)?", "Disconnect from \(model.partner)?"), isPresented: $confirmDisconnect, titleVisibility: .visible) {
                 Button(L("Gỡ kết nối", "Disconnect"), role: .destructive) { model.disconnect() }
             } message: {
                 Text(L("App ngừng gửi dữ liệu. Muốn nối lại thì dán lại mã kết nối.", "The app stops sending data. Paste the connection code again to reconnect."))

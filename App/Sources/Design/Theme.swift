@@ -110,26 +110,31 @@ extension View {
     func card() -> some View { modifier(CardModifier()) }
 }
 
+// Nút bị khoá phải trông khác nút bấm được, không thì người dùng tưởng app treo.
 struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.title3.weight(.bold))
             .frame(maxWidth: .infinity, minHeight: 60)
             .foregroundStyle(Palette.onPrimary)
             .background(Palette.primary, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .opacity(configuration.isPressed ? 0.85 : 1)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.4)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }
 
 struct SecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.body.weight(.semibold))
             .frame(maxWidth: .infinity, minHeight: 48)
             .foregroundStyle(Palette.primary)
             .background(Palette.primarySoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .opacity(configuration.isPressed ? 0.8 : 1)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.4)
     }
 }
 

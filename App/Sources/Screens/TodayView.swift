@@ -37,7 +37,7 @@ struct TodayView: View {
             Text(TodayText.dayTitle(now))
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(Palette.textSecondary)
-            Text(L("Chào Ner", "Hi Ner"))
+            Text(model.greeting)
                 .font(.largeTitle.bold())
                 .foregroundStyle(Palette.text)
         }
@@ -59,7 +59,7 @@ struct TodayView: View {
                 .foregroundStyle(Palette.primary)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 4) {
-                Text(L("Lời nhắn từ Tùng", "Message from Tùng"))
+                Text(L("Lời nhắn từ \(model.partner)", "Message from \(model.partner)"))
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Palette.primary)
                 Text(message)
