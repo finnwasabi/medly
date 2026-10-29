@@ -5,6 +5,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-29
+
+### Fixed
+- 0.1.4 and 0.1.5 were built from an outdated commit and did not contain their fixes. This release ships both: the level History stats and the "no data" days in the week strip.
+
 ## [0.1.5] - 2026-10-29
 
 ### Fixed
@@ -61,7 +66,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/ners-daily/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/finnwasabi/ners-daily/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/finnwasabi/ners-daily/compare/v0.1.3...v0.1.6
 [0.1.5]: https://github.com/finnwasabi/ners-daily/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/finnwasabi/ners-daily/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/finnwasabi/ners-daily/compare/v0.1.2...v0.1.3
