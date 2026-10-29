@@ -1,0 +1,41 @@
+# Gắn tag vX.Y.Z thì build .ipa không ký, đính kèm cùng source.json vào GitHub Release.
+# SideStore đọc source cố định: https://github.com/finnwasabi/ners-daily/releases/latest/download/source.json
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        run: git clone --depth 1 --branch "$GITHUB_REF_NAME" "https://github.com/$GITHUB_REPOSITORY" .
+      - name: Select newest Xcode
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Test
+        run: |
+          swift test --package-path Packages/NersCore
+          (cd server && node --test)
+      - name: Build ipa
+        run: VERSION="${GITHUB_REF_NAME#v}" BUILD="$GITHUB_RUN_NUMBER" scripts/build-ipa.sh
+      - name: Make source.json
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/NersDaily-$VERSION.ipa"
+          python3 scripts/make-source.py "build/NersDaily-$VERSION.ipa" "$VERSION" "$GITHUB_RUN_NUMBER" "$URL" "$(date -u +%F)" > build/source.json
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "build/NersDaily-${GITHUB_REF_NAME#v}.ipa" build/source.json \
+            --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

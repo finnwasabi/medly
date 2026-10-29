@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Build file .ipa không ký để cài qua SideStore (SideStore tự ký lại bằng Apple ID của máy cài).
+# VERSION và BUILD (tuỳ chọn) đè số phiên bản trong project.yml, CI truyền từ tag.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,6 +15,7 @@ xcodebuild \
   -destination 'generic/platform=iOS' \
   -derivedDataPath build/DerivedData \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+  ${VERSION:+MARKETING_VERSION="$VERSION"} ${BUILD:+CURRENT_PROJECT_VERSION="$BUILD"} \
   -quiet build
 
 APP="build/DerivedData/Build/Products/Release-iphoneos/NersDaily.app"
