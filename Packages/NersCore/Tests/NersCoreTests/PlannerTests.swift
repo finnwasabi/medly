@@ -120,6 +120,16 @@ import Testing
         #expect(dose.deadlineAt == vn(2026, 10, 29, 22, 30))
     }
 
+    @Test func fewMinutesPastDeadlineIsStillOnTime() {
+        var planner = Planner(settings: settings)
+        planner.markTaken(at: vn(2026, 10, 27, 21, 0))
+        planner.markTaken(at: vn(2026, 10, 28, 21, 10))
+        planner.markTaken(at: vn(2026, 10, 29, 21, 26))
+        let now = vn(2026, 10, 29, 22)
+        #expect(planner.timeline(now: now).map(\.status) == [.taken, .taken, .late])
+        #expect(planner.lateCount(now: now) == 1)
+    }
+
     @Test func overdueKeepsRingingWithSoundUntilLateWindowEnds() {
         var planner = Planner(settings: settings)
         planner.markTaken(at: vn(2026, 10, 27, 21))

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TodayView: View {
     @Environment(AppModel.self) private var model
+    @State private var pillsSheet = false
 
     var body: some View {
         NavigationStack {
@@ -14,10 +15,10 @@ struct TodayView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         header(now: now)
                         if let issue = model.issue { issueBanner(issue) }
-                        messageCard
+                        if let message = model.message { messageCard(message) }
                         doseCard(now: now)
                         if let pills = model.planner.settings.pills { pillsCard(pills) }
-                        weekCard
+                        weekCard(now: now)
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
@@ -25,6 +26,7 @@ struct TodayView: View {
             }
             .background(Palette.background)
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $pillsSheet) { PillsSheet() }
         }
     }
 
@@ -49,8 +51,7 @@ struct TodayView: View {
             .background(DoseStatus.missed.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    // Lời nhắn tới từ server ở P7, tạm dùng chữ mẫu.
-    private var messageCard: some View {
+    private func messageCard(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "heart.fill")
                 .foregroundStyle(Palette.primary)
@@ -59,7 +60,7 @@ struct TodayView: View {
                 Text("Lời nhắn từ Tùng")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Palette.primary)
-                Text(Mock.message)
+                Text(message)
                     .font(.body)
                     .foregroundStyle(Palette.text)
             }
@@ -177,18 +178,28 @@ struct TodayView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(DoseStatus.late.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
+            Button("Thêm viên") { pillsSheet = true }
+                .buttonStyle(SecondaryButtonStyle())
         }
         .card()
     }
 
-    // 7 ngày qua lấy từ timeline ở P5, tạm dùng dữ liệu mẫu.
-    private var weekCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func weekCard(now: Date) -> some View {
+        let calendar = VietnamClock.calendar
+        let today = calendar.startOfDay(for: now)
+        let statuses = model.planner.dayStatuses(now: now)
+        let shortNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]
+        let days: [(name: String, status: DoseStatus)] = (0..<7).reversed().map { back in
+            let day = calendar.date(byAdding: .day, value: -back, to: today)!
+            let name = shortNames[calendar.component(.weekday, from: day) - 1]
+            return (name, statuses[day].map(DoseStatus.init) ?? .upcoming)
+        }
+        return VStack(alignment: .leading, spacing: 12) {
             Text("7 ngày qua")
                 .font(.headline)
                 .foregroundStyle(Palette.text)
             HStack(spacing: 0) {
-                ForEach(Array(zip(["T6", "T7", "CN", "T2", "T3", "T4", "T5"], Mock.week)), id: \.0) { day, status in
+                ForEach(days, id: \.name) { day, status in
                     VStack(spacing: 6) {
                         Image(systemName: status.icon)
                             .font(.title2)

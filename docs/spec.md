@@ -43,7 +43,8 @@ Tài liệu này là nguồn chuẩn cho logic nhắc uống thuốc và hợp �
 - Có nhập: mỗi lần "Đã uống" trừ một viên. "Thêm viên" cộng vào số còn lại và tổng.
 - "Nhắc mua thêm": bật tắt, kèm số ngày trước khi hết (mặc định 7). Khi số viên còn lại nhỏ hơn hoặc bằng
   số ngày đó, mỗi lần báo uống kèm dòng "còn N viên, nhớ mua thêm".
-- **Trễ** = uống sau hạn chót nhưng còn trong cửa sổ trễ. Vẫn tính là đã uống, lần kế tính từ lúc uống.
+- **Trễ** = uống sau hạn chót quá 15 phút (dung sai, chỉnh được, để chênh vài giây hay vài phút không thành trễ)
+  nhưng còn trong cửa sổ trễ. Vẫn tính là đã uống, lần kế tính từ lúc uống.
 - **Hụt** = qua hết cửa sổ trễ mà không có xác nhận. Đếm trên máy, không cần mạng.
 - `daysTaken` = số lần đã uống kể từ lần nhập hoặc thêm viên gần nhất (khi không đếm viên: kể từ lúc cài).
 

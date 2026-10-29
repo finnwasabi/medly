@@ -1,38 +1,50 @@
+import NersCore
 import SwiftUI
 
 struct HistoryView: View {
+    @Environment(AppModel.self) private var model
+    /// 0 là tháng này, -1 là tháng trước.
+    @State private var monthOffset = 0
+    @State private var editing: DoseRecord?
+
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
+    private var calendar: Calendar { VietnamClock.calendar }
 
     var body: some View {
+        let now = Date.now
+        let planner = model.planner
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    summaryCard
-                    calendarCard
-                    entriesCard
+                    summaryCard(planner: planner, now: now)
+                    calendarCard(days: planner.dayStatuses(now: now), now: now)
+                    entriesCard(planner.timeline(now: now).reversed().prefix(14).map { $0 })
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
             .background(Palette.background)
             .navigationTitle("Lịch sử")
+            .sheet(item: $editing) { record in
+                EditTakenTimeSheet(record: record)
+            }
         }
     }
 
-    private var summaryCard: some View {
+    private func summaryCard(planner: Planner, now: Date) -> some View {
         HStack(spacing: 0) {
-            stat(value: "26", label: "ngày đã uống", color: DoseStatus.taken.foreground)
+            stat(value: planner.daysTaken(now: now), label: "ngày đã uống", color: DoseStatus.taken.foreground)
             Divider().frame(height: 40)
-            stat(value: "2", label: "lần trễ", color: DoseStatus.late.foreground)
+            stat(value: planner.lateCount(now: now), label: "lần trễ", color: DoseStatus.late.foreground)
             Divider().frame(height: 40)
-            stat(value: "1", label: "viên hụt", color: DoseStatus.missed.foreground)
+            stat(value: planner.missedCount(now: now), label: "viên hụt", color: DoseStatus.missed.foreground)
         }
         .card()
     }
 
-    private func stat(value: String, label: String, color: Color) -> some View {
+    private func stat(value: Int, label: String, color: Color) -> some View {
         VStack(spacing: 2) {
-            Text(value)
+            Text("\(value)")
                 .font(.title.bold().monospacedDigit())
                 .foregroundStyle(color)
             Text(label)
@@ -42,15 +54,24 @@ struct HistoryView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var calendarCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func calendarCard(days: [Date: NersCore.DoseStatus], now: Date) -> some View {
+        let today = calendar.startOfDay(for: now)
+        let month = calendar.date(byAdding: .month, value: monthOffset, to: calendar.date(from: calendar.dateComponents([.year, .month], from: now))!)!
+        let parts = calendar.dateComponents([.year, .month], from: month)
+        let dayCount = calendar.range(of: .day, in: .month, for: month)!.count
+        // Thứ Hai đầu tuần: weekday 2 thành 0 ô trống, Chủ Nhật (1) thành 6.
+        let leading = (calendar.component(.weekday, from: month) + 5) % 7
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Tháng 10, 2026")
+                Text("Tháng \(parts.month!), \(String(parts.year!))")
                     .font(.headline)
                     .foregroundStyle(Palette.text)
                 Spacer()
-                Image(systemName: "chevron.left")
-                Image(systemName: "chevron.right")
+                Button { monthOffset -= 1 } label: { Image(systemName: "chevron.left") }
+                    .accessibilityLabel("Tháng trước")
+                Button { monthOffset += 1 } label: { Image(systemName: "chevron.right") }
+                    .accessibilityLabel("Tháng sau")
+                    .disabled(monthOffset >= 0)
                     .padding(.leading, 16)
             }
             .foregroundStyle(Palette.primary)
@@ -60,28 +81,31 @@ struct HistoryView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Palette.textSecondary)
                 }
-                // 01/10/2026 là Thứ Năm: chừa 3 ô trống.
-                ForEach(0..<3, id: \.self) { _ in Color.clear.frame(height: 40) }
-                ForEach(Mock.month) { day in
-                    // Ngày chưa tới để trống nền cho khỏi lẫn với Tạm dừng.
-                    let future = day.status == .upcoming
-                    Text("\(day.day)")
-                        .font(.callout.weight(.semibold).monospacedDigit())
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                        .foregroundStyle(future ? Palette.textSecondary : day.status.foreground)
-                        .background(future ? Color.clear : day.status.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay {
-                            if day.day == Mock.today {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(Palette.primary, lineWidth: 2)
-                            }
-                        }
-                        .accessibilityLabel("Ngày \(day.day), \(future ? "chưa tới" : day.status.label)")
+                // Id âm để không trùng id các ô ngày trong cùng lưới.
+                ForEach(-leading..<0, id: \.self) { _ in Color.clear.frame(height: 40) }
+                ForEach(1...dayCount, id: \.self) { day in
+                    let date = calendar.date(byAdding: .day, value: day - 1, to: month)!
+                    dayCell(day: day, status: days[date].map(DoseStatus.init), isToday: date == today)
                 }
             }
             legend
         }
         .card()
+    }
+
+    private func dayCell(day: Int, status: DoseStatus?, isToday: Bool) -> some View {
+        Text("\(day)")
+            .font(.callout.weight(.semibold).monospacedDigit())
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .foregroundStyle(status?.foreground ?? Palette.textSecondary)
+            .background(status?.background ?? .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                if isToday {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Palette.primary, lineWidth: 2)
+                }
+            }
+            .accessibilityLabel("Ngày \(day), \(status?.label ?? "chưa có")")
     }
 
     private var legend: some View {
@@ -95,29 +119,42 @@ struct HistoryView: View {
         .padding(.top, 4)
     }
 
-    private var entriesCard: some View {
+    private func entriesCard(_ records: [DoseRecord]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Gần đây")
                 .font(.headline)
                 .foregroundStyle(Palette.text)
                 .padding(.bottom, 8)
-            ForEach(Mock.entries) { entry in
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(entry.date)
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(Palette.text)
-                        Text("\(entry.time) giờ VN" + (entry.note.map { ", \($0)" } ?? ""))
-                            .font(.footnote)
-                            .foregroundStyle(Palette.textSecondary)
-                    }
-                    Spacer()
-                    StatusPill(status: entry.status)
-                }
-                .padding(.vertical, 10)
-                if entry.id != Mock.entries.last?.id { Divider() }
+            if records.isEmpty {
+                Text("Chưa có lần uống nào.")
+                    .foregroundStyle(Palette.textSecondary)
+                    .padding(.vertical, 10)
             }
-            Text("Chạm vào một ngày để sửa giờ uống.")
+            ForEach(records) { record in
+                let editable = record.takenAt != nil
+                Button {
+                    if editable { editing = record }
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(TodayText.dayTitle(record.takenAt ?? record.scheduledAt))
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(Palette.text)
+                            Text(record.takenAt.map { TimeFormatting.vietnamTime($0) } ?? "giờ uống \(TimeFormatting.vietnamTime(record.scheduledAt))")
+                                .font(.footnote)
+                                .foregroundStyle(Palette.textSecondary)
+                        }
+                        Spacer()
+                        StatusPill(status: DoseStatus(record.status))
+                    }
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!editable)
+                if record.id != records.last?.id { Divider() }
+            }
+            Text("Chạm vào một lần uống để sửa giờ.")
                 .font(.footnote)
                 .foregroundStyle(Palette.textSecondary)
                 .padding(.top, 8)
@@ -126,4 +163,35 @@ struct HistoryView: View {
     }
 }
 
-#Preview { HistoryView() }
+/// Sửa giờ uống của một lần, nhập theo giờ VN.
+struct EditTakenTimeSheet: View {
+    let record: DoseRecord
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var date = Date.now
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                DatePicker("Giờ uống (giờ VN)", selection: $date, in: ...Date.now)
+                    .environment(\.timeZone, VietnamClock.timeZone)
+            }
+            .navigationTitle("Sửa giờ uống")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Huỷ") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Lưu") {
+                        model.update { $0.editTakenTime(id: record.id, to: date) }
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear { date = record.takenAt ?? .now }
+        }
+        .presentationDetents([.medium])
+        .tint(Palette.primary)
+    }
+}
+
+#Preview { HistoryView().environment(AppModel.shared) }
