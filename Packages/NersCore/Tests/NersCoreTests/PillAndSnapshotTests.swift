@@ -46,22 +46,31 @@ import Testing
 @Suite struct SnapshotTests {
     static let specJSON = """
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "name": null,
       "updatedAt": "2026-10-27T14:03:00Z",
-      "lastTakenAt": "2026-10-27T14:03:00Z",
-      "nextDueAt": "2026-10-28T14:00:00Z",
-      "deadlineAt": "2026-10-28T14:03:00Z",
-      "daysTaken": 12,
-      "missedCount": 1,
-      "lateCount": 0,
-      "madeUpCount": 0,
-      "pillsTotal": 28,
-      "pillsRemaining": 16,
-      "refillReminder": { "enabled": true, "daysBefore": 7 },
-      "pausedUntil": null
+      "medications": [
+        {
+          "id": "6F9619FF-8B86-D011-B42D-00C04FC964FF",
+          "name": "Daily pill",
+          "dosesPerDay": 1,
+          "lastTakenAt": "2026-10-27T14:03:00Z",
+          "nextDueAt": "2026-10-28T14:00:00Z",
+          "deadlineAt": "2026-10-28T14:03:00Z",
+          "takenCount": 12,
+          "missedCount": 1,
+          "lateCount": 0,
+          "madeUpCount": 0,
+          "pillsTotal": 28,
+          "pillsRemaining": 16,
+          "refillReminder": { "enabled": true, "daysBefore": 7 },
+          "pausedUntil": null
+        }
+      ]
     }
     """
+
+    static let id = UUID(uuidString: "6F9619FF-8B86-D011-B42D-00C04FC964FF")!
 
     private func object(_ data: Data) throws -> NSDictionary {
         try #require(JSONSerialization.jsonObject(with: data) as? NSDictionary)
@@ -70,12 +79,12 @@ import Testing
     /// Rebuilds the exact situation of the spec's sample JSON: taken at 21:03 Vietnam time daily from 15/10,
     /// skipping 20/10, with 28 pills entered.
     @Test func matchesSpecExample() throws {
-        var planner = Planner(settings: ReminderSettings(pills: PillCounter(count: 28, at: vn(2026, 10, 15, 8))))
+        var medication = Medication(id: Self.id, name: "Daily pill", settings: ReminderSettings(pills: PillCounter(count: 28, at: vn(2026, 10, 15, 8))))
         for day in 15...27 where day != 20 {
-            planner.markTaken(at: vn(2026, 10, day, 21, 3))
+            medication.planner.markTaken(at: vn(2026, 10, day, 21, 3))
         }
         let now = utc("2026-10-27T14:03:00Z")
-        let data = try planner.snapshot(now: now).jsonData()
+        let data = try Snapshot(name: nil, medications: [medication], now: now).jsonData()
         #expect(try object(data) == object(Data(Self.specJSON.utf8)))
 
         let text = String(decoding: data, as: UTF8.self)
@@ -84,22 +93,24 @@ import Testing
     }
 
     @Test func nullsAndRoundTrip() throws {
-        var planner = Planner(settings: ReminderSettings(refillReminder: RefillReminder(enabled: false, daysBefore: 5)))
-        planner.pause(days: 2, now: vn(2026, 10, 27, 8))
+        var medication = Medication(name: "B", settings: ReminderSettings(refillReminder: RefillReminder(enabled: false, daysBefore: 5)))
+        medication.planner.pause(days: 2, now: vn(2026, 10, 27, 8))
         let now = vn(2026, 10, 27, 8).addingTimeInterval(0.75)
-        let snapshot = planner.snapshot(now: now)
+        let snapshot = Snapshot(name: "Ner", medications: [medication], now: now)
         let data = try snapshot.jsonData()
         let json = try object(data)
+        let med = try #require((json["medications"] as? [NSDictionary])?.first)
         for key in ["lastTakenAt", "pillsTotal", "pillsRemaining"] {
-            #expect(json[key] is NSNull)
+            #expect(med[key] is NSNull)
         }
-        #expect(json["pausedUntil"] as? String == "2026-10-29T01:00:00Z")
+        #expect(med["pausedUntil"] as? String == "2026-10-29T01:00:00Z")
         #expect(json["updatedAt"] as? String == "2026-10-27T01:00:00Z")
-        #expect(json.count == 14)
+        #expect(json.count == 4)
+        #expect(med.count == 14)
 
         let decoded = try Snapshot.decode(from: data)
         #expect(decoded == snapshot)
-        #expect(try Snapshot.decode(from: Data(SnapshotTests.specJSON.utf8)).nextDueAt == utc("2026-10-28T14:00:00Z"))
+        #expect(try Snapshot.decode(from: Data(SnapshotTests.specJSON.utf8)).medications.first?.nextDueAt == utc("2026-10-28T14:00:00Z"))
     }
 
     @Test func settingsDecodeWithDefaults() throws {

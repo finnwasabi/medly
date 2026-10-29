@@ -2,25 +2,52 @@ import NersCore
 import SwiftUI
 import UIKit
 
-// Three-tier palette: one primary (dusty rose), a warm grey ramp, and soft status colors.
-// Every color has a light and a dark variant, and text on its background meets WCAG AA.
+// Neubrutalism, the cute way: flat pastel fills, a thick ink outline and a hard offset shadow with no blur.
+// Pressing a button pushes it into its shadow. Ink flips in dark mode (cream outlines on a dark page) so the
+// outlines and shadows stay visible; text on pastel fills is always dark ink, which keeps it above WCAG AA.
 enum Palette {
-    static let primary = Color(light: 0xC8435E, dark: 0xF07A92)
-    static let onPrimary = Color(light: 0xFFFFFF, dark: 0x2A0F17)
-    static let primarySoft = Color(light: 0xFBE6EA, dark: 0x3A1E27)
+    /// Outlines, hard shadows and main text.
+    static let ink = Color(light: 0x161616, dark: 0xF4EDE4)
+    static let text = ink
+    static let textSecondary = Color(light: 0x4F4742, dark: 0xC9BFB5)
+    /// Text and icons on pastel fills, in both modes.
+    static let onFill = Color(hex: 0x161616)
 
-    static let background = Color(light: 0xFBF6F3, dark: 0x17121A)
-    static let surface = Color(light: 0xFFFFFF, dark: 0x241D26)
-    static let border = Color(light: 0xEADFDA, dark: 0x3A3039)
-    static let text = Color(light: 0x2B2226, dark: 0xF5EEF0)
-    static let textSecondary = Color(light: 0x6E6166, dark: 0xB8AAB0)
+    static let background = Color(light: 0xFFF3E6, dark: 0x17131C)
+    static let surface = Color(light: 0xFFFFFF, dark: 0x262030)
+
+    static let pink = Color(hex: 0xFF8FC0)
+    static let yellow = Color(hex: 0xFFD84D)
+    static let mint = Color(hex: 0x7CE3B8)
+    static let lavender = Color(hex: 0xB8A6FF)
+    static let sky = Color(hex: 0x88CBFF)
+    static let peach = Color(hex: 0xFFAF7A)
+    static let coral = Color(hex: 0xFF7B7B)
+    static let stone = Color(hex: 0xE3DAD0)
+
+    static let primary = pink
 }
 
-// Dose status. Fixed colors: green = taken, amber = late, blue = missed but made up,
-// red = missed, grey = paused. Made up needs its own color because calendar cells show only the day number.
+enum Neo {
+    static let border: CGFloat = 2.5
+    static let shadow: CGFloat = 4
+    static let radius: CGFloat = 16
+}
+
+/// The colors and icons a medication can wear. Stored as indexes and names, so the data stays UI free.
+enum Swatch {
+    static let colors: [Color] = [Palette.pink, Palette.yellow, Palette.mint, Palette.lavender, Palette.sky, Palette.peach]
+    static let icons = ["pills.fill", "capsule.fill", "drop.fill", "heart.fill", "leaf.fill", "sun.max.fill", "moon.fill", "sparkles"]
+
+    static func color(_ index: Int) -> Color { colors[((index % colors.count) + colors.count) % colors.count] }
+}
+
+// Dose status. Fixed colors: green = taken, yellow = late, blue = missed but made up, red = missed, grey = paused.
 // Always paired with a label and an icon, never color alone.
 enum DoseStatus {
     case taken, late, madeUp, missed, paused, upcoming
+    /// Due now, before the deadline: not late yet.
+    case due
     /// A past day before the user started, with nothing to report.
     case noData
 
@@ -32,113 +59,32 @@ enum DoseStatus {
         case .missed: L("Hụt", "Missed")
         case .paused: L("Tạm dừng", "Paused")
         case .upcoming: L("Sắp tới", "Upcoming")
+        case .due: L("Tới giờ", "Due now")
         case .noData: L("Chưa có dữ liệu", "No data")
         }
     }
 
     var icon: String {
         switch self {
-        case .taken: "checkmark.circle.fill"
-        case .late: "clock.badge.exclamationmark.fill"
-        case .madeUp: "arrow.uturn.backward.circle.fill"
-        case .missed: "xmark.circle.fill"
-        case .paused: "pause.circle.fill"
-        case .upcoming: "circle.dotted"
-        case .noData: "minus.circle"
+        case .taken: "checkmark"
+        case .late: "clock.badge.exclamationmark"
+        case .madeUp: "arrow.uturn.backward"
+        case .missed: "xmark"
+        case .paused: "pause.fill"
+        case .upcoming: "hourglass"
+        case .due: "bell.fill"
+        case .noData: "minus"
         }
     }
 
-    var background: Color {
+    var fill: Color {
         switch self {
-        case .taken: Color(light: 0xE3F3E9, dark: 0x1E3A2A)
-        case .late: Color(light: 0xFFF1D6, dark: 0x3D2F12)
-        case .madeUp: Color(light: 0xE3ECFA, dark: 0x1D2A44)
-        case .missed: Color(light: 0xFDE4E4, dark: 0x42191C)
-        case .paused, .upcoming, .noData: Color(light: 0xEEE9E7, dark: 0x2E2730)
+        case .taken: Color(hex: 0x7CE3A6)
+        case .late, .due: Palette.yellow
+        case .madeUp: Palette.sky
+        case .missed: Palette.coral
+        case .paused, .upcoming, .noData: Palette.stone
         }
-    }
-
-    var foreground: Color {
-        switch self {
-        case .taken: Color(light: 0x1F6B41, dark: 0x8FD9AE)
-        case .late: Color(light: 0x8A5A00, dark: 0xF2C46B)
-        case .madeUp: Color(light: 0x2B5797, dark: 0x9DBCF2)
-        case .missed: Color(light: 0xA8282E, dark: 0xF39A9E)
-        case .paused, .upcoming, .noData: Color(light: 0x5F5559, dark: 0xC9BEC3)
-        }
-    }
-}
-
-extension Color {
-    init(light: UInt32, dark: UInt32) {
-        self.init(uiColor: UIColor { traits in
-            UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light)
-        })
-    }
-}
-
-extension UIColor {
-    convenience init(hex: UInt32) {
-        self.init(
-            red: CGFloat((hex >> 16) & 0xFF) / 255,
-            green: CGFloat((hex >> 8) & 0xFF) / 255,
-            blue: CGFloat(hex & 0xFF) / 255,
-            alpha: 1)
-    }
-}
-
-struct StatusPill: View {
-    let status: DoseStatus
-
-    var body: some View {
-        Label(status.label, systemImage: status.icon)
-            .font(.subheadline.weight(.semibold))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .foregroundStyle(status.foreground)
-            .background(status.background, in: Capsule())
-    }
-}
-
-struct CardModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border))
-    }
-}
-
-extension View {
-    func card() -> some View { modifier(CardModifier()) }
-}
-
-// Disabled buttons must look different from enabled ones, or users think the app froze.
-struct PrimaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.title3.weight(.bold))
-            .frame(maxWidth: .infinity, minHeight: 60)
-            .foregroundStyle(Palette.onPrimary)
-            .background(Palette.primary, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.4)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-    }
-}
-
-struct SecondaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.body.weight(.semibold))
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .foregroundStyle(Palette.primary)
-            .background(Palette.primarySoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.4)
     }
 }
 
@@ -151,6 +97,299 @@ extension DoseStatus {
         case .paused: self = .paused
         case .madeUp: self = .madeUp
         }
+    }
+}
+
+extension Color {
+    init(light: UInt32, dark: UInt32) {
+        self.init(uiColor: UIColor { traits in
+            UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light)
+        })
+    }
+
+    init(hex: UInt32) { self.init(uiColor: UIColor(hex: hex)) }
+}
+
+extension UIColor {
+    convenience init(hex: UInt32) {
+        self.init(
+            red: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: 1)
+    }
+}
+
+// MARK: Surfaces
+
+extension View {
+    /// A flat fill with an ink outline and a hard shadow. `shadow` 0 draws the pressed state.
+    func neo(_ fill: Color = Palette.surface, radius: CGFloat = Neo.radius, shadow: CGFloat = Neo.shadow) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        return background(fill, in: shape)
+            .overlay(shape.strokeBorder(Palette.ink, lineWidth: Neo.border))
+            .background(shape.fill(Palette.ink).offset(x: shadow, y: shadow))
+    }
+
+    /// A padded card.
+    func card(_ fill: Color = Palette.surface) -> some View {
+        padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .neo(fill)
+    }
+}
+
+/// A rounded square sticker with an SF Symbol, for medications and section headers.
+struct IconBadge: View {
+    let icon: String
+    var fill: Color = Palette.pink
+    var size: CGFloat = 44
+
+    var body: some View {
+        Image(systemName: icon)
+            .font(.system(size: size * 0.45, weight: .bold))
+            .foregroundStyle(Palette.onFill)
+            .frame(width: size, height: size)
+            .neo(fill, radius: size * 0.3, shadow: 2.5)
+            .accessibilityHidden(true)
+    }
+}
+
+struct StatusPill: View {
+    let status: DoseStatus
+
+    var body: some View {
+        Label(status.label, systemImage: status.icon)
+            .font(.subheadline.weight(.heavy))
+            .foregroundStyle(Palette.onFill)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .neo(status.fill, radius: 10, shadow: 2)
+    }
+}
+
+/// A callout inside a card: warnings, refill notes, sync errors.
+struct Callout: View {
+    let text: String
+    let icon: String
+    var fill: Color = Palette.coral
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+            Text(text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .font(.callout.weight(.bold))
+        .foregroundStyle(Palette.onFill)
+        .padding(12)
+        .neo(fill, radius: 12, shadow: 2.5)
+    }
+}
+
+/// A section title above a group of cards.
+struct SectionTitle: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.title3.weight(.black))
+            .foregroundStyle(Palette.text)
+            .padding(.top, 8)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+// MARK: Controls
+
+/// The chunky button. Disabled buttons look flat and faded, or users think the app froze.
+struct NeoButtonStyle: ButtonStyle {
+    var fill: Color = Palette.primary
+    var large = true
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed && isEnabled
+        let depth = isEnabled ? (pressed ? 0 : Neo.shadow) : 0
+        configuration.label
+            .font(large ? .title3.weight(.black) : .body.weight(.heavy))
+            .multilineTextAlignment(.center)
+            .foregroundStyle(Palette.onFill)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: large ? 58 : 46)
+            .neo(fill, radius: large ? 16 : 12, shadow: depth)
+            .offset(x: Neo.shadow - depth, y: Neo.shadow - depth)
+            .opacity(isEnabled ? 1 : 0.45)
+            .animation(.snappy(duration: 0.12), value: pressed)
+    }
+}
+
+/// A small inline action, like "Undo" or "Mark made up". Always a light or pastel fill with dark text.
+struct ChipButtonStyle: ButtonStyle {
+    var fill: Color = Palette.surfaceOnFill
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let depth: CGFloat = configuration.isPressed ? 0 : 2.5
+        configuration.label
+            .font(.subheadline.weight(.heavy))
+            .foregroundStyle(Palette.onFill)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 36)
+            .neo(fill, radius: 10, shadow: depth)
+            .offset(x: 2.5 - depth, y: 2.5 - depth)
+            .opacity(isEnabled ? 1 : 0.45)
+    }
+}
+
+/// An outlined pill switch.
+struct NeoToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button { configuration.isOn.toggle() } label: {
+            HStack(spacing: 12) {
+                configuration.label
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Palette.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                ZStack(alignment: configuration.isOn ? .trailing : .leading) {
+                    Capsule().fill(configuration.isOn ? Palette.mint : Palette.stone)
+                        .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: Neo.border))
+                        .frame(width: 54, height: 32)
+                    Circle().fill(Color.white)
+                        .overlay(Circle().strokeBorder(Palette.ink, lineWidth: Neo.border))
+                        .frame(width: 32, height: 32)
+                }
+                .animation(.snappy(duration: 0.15), value: configuration.isOn)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
+    }
+}
+
+/// Segmented choice in the same style, for two to four short options.
+struct NeoSegmented<Value: Hashable>: View {
+    let options: [(value: Value, label: String)]
+    @Binding var selection: Value
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(options, id: \.value) { option in
+                let selected = option.value == selection
+                Button { selection = option.value } label: {
+                    Text(option.label)
+                        .font(.subheadline.weight(.heavy))
+                        .foregroundStyle(selected ? Palette.onFill : Palette.text)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background(selected ? Palette.yellow : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay {
+                            if selected { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.ink, lineWidth: 2) }
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(5)
+        .neo(Palette.background, radius: 14, shadow: 0)
+    }
+}
+
+/// Minus and plus buttons around a value, in the same style.
+struct NeoStepper: View {
+    let label: String
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    var step = 1
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button { value = max(range.lowerBound, value - step) } label: { Image(systemName: "minus").frame(width: 22) }
+                .buttonStyle(ChipButtonStyle())
+                .disabled(value <= range.lowerBound)
+                .accessibilityHidden(true)
+            Text(label)
+                .font(.body.weight(.heavy).monospacedDigit())
+                .foregroundStyle(Palette.text)
+                .frame(minWidth: 64)
+                .multilineTextAlignment(.center)
+            Button { value = min(range.upperBound, value + step) } label: { Image(systemName: "plus").frame(width: 22) }
+                .buttonStyle(ChipButtonStyle())
+                .disabled(value >= range.upperBound)
+                .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: value = min(range.upperBound, value + step)
+            case .decrement: value = max(range.lowerBound, value - step)
+            @unknown default: break
+            }
+        }
+    }
+}
+
+/// A text field in an outlined box.
+struct NeoField: View {
+    let title: String
+    @Binding var text: String
+    var limit = AppModel.nameLimit
+
+    var body: some View {
+        TextField(title, text: Binding(get: { text }, set: { text = String($0.prefix(limit)) }))
+            .font(.body.weight(.semibold))
+            .foregroundStyle(Palette.text)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 52)
+            .neo(Palette.surface, radius: 14, shadow: 0)
+    }
+}
+
+/// A row inside a settings card: a label on the left, a control or value on the right.
+struct NeoRow<Trailing: View>: View {
+    let title: String
+    var detail: String?
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                labels
+                Spacer(minLength: 8)
+                trailing
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                labels
+                trailing
+            }
+        }
+        .frame(minHeight: 44)
+    }
+
+    private var labels: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Palette.text)
+            if let detail {
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+        }
+    }
+}
+
+/// A thin ink divider between rows of a card.
+struct InkDivider: View {
+    var body: some View {
+        Rectangle().fill(Palette.ink.opacity(0.15)).frame(height: 1.5)
     }
 }
 

@@ -11,7 +11,7 @@ import Observation
 final class AppModel {
     static let shared = AppModel()
 
-    private(set) var planner: Planner
+    private(set) var medications: [Medication]
     /// Load, save or scheduling errors. Shown on the Today screen, never swallowed.
     var issue: String? { scheduleIssue ?? dataIssue }
     private var dataIssue: String?
@@ -61,10 +61,23 @@ final class AppModel {
         return name.isEmpty ? L("người ấy", "your partner") : name
     }
 
+    // MARK: Reminder preferences
+
     /// Follow phone: reminders are plain notifications that respect the phone's mode, but the deadline is still a ringing alarm.
     var vibrateOnly: Bool {
         didSet {
             UserDefaults.standard.set(vibrateOnly, forKey: "vibrateOnly")
+            Task { await resync() }
+        }
+    }
+
+    /// Snooze length, like the iPhone Clock app: 9 minutes by default, 1 to 15.
+    static let snoozeRange = 1...15
+    var snoozeMinutes: Int = UserDefaults.standard.object(forKey: "snoozeMinutes") as? Int ?? 9 {
+        didSet {
+            snoozeMinutes = min(max(snoozeMinutes, Self.snoozeRange.lowerBound), Self.snoozeRange.upperBound)
+            guard snoozeMinutes != oldValue else { return }
+            UserDefaults.standard.set(snoozeMinutes, forKey: "snoozeMinutes")
             Task { await resync() }
         }
     }
@@ -92,13 +105,18 @@ final class AppModel {
         store = PlanStore(url: directory.appending(path: "state.json"))
         vibrateOnly = UserDefaults.standard.bool(forKey: "vibrateOnly")
         do {
-            planner = try store.load()
+            medications = try store.load()
         } catch {
-            // Keep the corrupt file for recovery and continue with defaults so reminders still run.
+            // Keep the corrupt file for recovery and continue empty so the app still opens.
             let backup = directory.appending(path: "state-corrupt-\(Int(Date.now.timeIntervalSince1970)).json")
             try? FileManager.default.moveItem(at: store.url, to: backup)
-            planner = Planner()
-            dataIssue = L("Không đọc được dữ liệu cũ, đã cất vào \(backup.lastPathComponent). App chạy lại từ cài đặt mặc định.", "Could not read old data, saved it as \(backup.lastPathComponent). The app restarted with default settings.")
+            medications = []
+            dataIssue = L("Không đọc được dữ liệu cũ, đã cất vào \(backup.lastPathComponent). Thêm lại thuốc trong tab Thuốc.", "Could not read old data, saved it as \(backup.lastPathComponent). Add your medications again in the Meds tab.")
+        }
+        // Data from before medications had names: give it one in the chosen language.
+        if medications.contains(where: { $0.name.isEmpty }) {
+            for i in medications.indices where medications[i].name.isEmpty { medications[i].name = L("Thuốc hằng ngày", "Daily pill") }
+            persist()
         }
         // When the network comes back (after landing), send the latest snapshot.
         network.pathUpdateHandler = { path in
@@ -107,6 +125,17 @@ final class AppModel {
         }
         network.start(queue: .global(qos: .utility))
     }
+
+    func medication(_ id: UUID) -> Medication? { medications.first { $0.id == id } }
+
+    /// The next swatch, so new medications do not all look the same.
+    var nextColor: Int {
+        (0..<Swatch.colors.count).min { a, b in
+            medications.filter { $0.color == a }.count < medications.filter { $0.color == b }.count
+        } ?? 0
+    }
+
+    // MARK: Connection
 
     /// Paste the connection code from the /link command. Returns `false` if the code is malformed.
     func connect(code: String) async -> Bool {
@@ -126,9 +155,8 @@ final class AppModel {
     func sync() async {
         guard shareEnabled, let connection else { return }
         do {
-            var snapshot = planner.snapshot(now: .now)
             let name = userName.trimmingCharacters(in: .whitespaces)
-            snapshot.name = name.isEmpty ? nil : String(name.prefix(60))
+            let snapshot = Snapshot(name: name.isEmpty ? nil : String(name.prefix(60)), medications: medications, now: .now)
             let reply = try await syncClient.send(snapshot, to: connection)
             message = reply.message
             UserDefaults.standard.set(reply.message, forKey: "message")
@@ -140,40 +168,60 @@ final class AppModel {
         }
     }
 
-    func markTaken(now: Date = .now) async {
-        // Tapping on the alarm and again in the app counts once.
-        if let last = planner.lastTaken(now: now)?.takenAt, now.timeIntervalSince(last) < planner.settings.undoWindow {
-            await resync(cancelActive: true)
-            return
+    // MARK: Actions
+
+    /// "Taken" for these medications. An empty list (an alarm from before medications existed) means every medication
+    /// that is due now.
+    func markTaken(_ ids: [UUID], now: Date = .now) async {
+        let targets = ids.isEmpty ? medications.filter { $0.planner.currentDose(now: now).dueAt <= now }.map(\.id) : ids
+        for id in targets {
+            guard let i = medications.firstIndex(where: { $0.id == id }) else { continue }
+            // Tapping on the alarm and again in the app counts once.
+            if let last = medications[i].planner.lastTaken(now: now)?.takenAt,
+               now.timeIntervalSince(last) < medications[i].settings.undoWindow { continue }
+            medications[i].planner.markTaken(at: now)
         }
-        planner.markTaken(at: now)
         persist()
-        await resync(cancelActive: true)
+        await resync(cancelActiveFor: Set(targets))
     }
 
-    func undo(now: Date = .now) async {
-        guard planner.undoLastTaken(now: now) else { return }
+    func undo(_ id: UUID, now: Date = .now) async {
+        guard let i = medications.firstIndex(where: { $0.id == id }), medications[i].planner.undoLastTaken(now: now) else { return }
         persist()
         await resync()
     }
 
     /// "Mark made up" for a missed dose.
-    func markMadeUp(missedAt scheduledAt: Date) {
-        update { $0.markMadeUp(missedAt: scheduledAt, at: .now) }
+    func markMadeUp(_ id: UUID, missedAt scheduledAt: Date) {
+        update(id) { $0.planner.markMadeUp(missedAt: scheduledAt, at: .now) }
     }
 
-    /// Every change to settings, pills, pauses or taken times goes through here: save, then reschedule.
-    func update(_ change: (inout Planner) -> Void) {
-        change(&planner)
+    /// Every change to one medication's settings, pills, pauses or taken times goes through here: save, then reschedule.
+    func update(_ id: UUID, _ change: (inout Medication) -> Void) {
+        guard let i = medications.firstIndex(where: { $0.id == id }) else { return }
+        change(&medications[i])
         persist()
         Task { await resync() }
     }
 
+    func add(_ medication: Medication) {
+        guard medications.count < Medication.limit else { return }
+        medications.append(medication)
+        persist()
+        Task { await resync() }
+    }
+
+    func delete(_ id: UUID) {
+        medications.removeAll { $0.id == id }
+        persist()
+        Task { await resync(cancelActiveFor: [id]) }
+    }
+
     private func persist() {
         do {
-            try store.save(planner)
+            try store.save(medications)
         } catch {
-            dataIssue = L("Không lưu được lần uống: \(error.localizedDescription)", "Could not save the dose: \(error.localizedDescription)")
+            dataIssue = L("Không lưu được dữ liệu: \(error.localizedDescription)", "Could not save your data: \(error.localizedDescription)")
         }
     }
 
@@ -181,12 +229,12 @@ final class AppModel {
 
     private var syncing = false
     private var syncAgain = false
-    private var cancelActivePending = false
+    private var cancelPending: Set<UUID> = []
 
     /// Cancels and reschedules all alarms and notifications. Overlapping calls coalesce into one more pass after the running one.
-    /// `cancelActive`: also cancel alarms that are ringing or snoozed (after a dose is taken).
-    func resync(cancelActive: Bool = false) async {
-        cancelActivePending = cancelActivePending || cancelActive
+    /// `cancelActiveFor`: also stop alarms of these medications that are ringing or snoozed (after a dose is taken).
+    func resync(cancelActiveFor ids: Set<UUID> = []) async {
+        cancelPending.formUnion(ids)
         guard !syncing else {
             syncAgain = true
             return
@@ -194,21 +242,21 @@ final class AppModel {
         syncing = true
         repeat {
             syncAgain = false
-            let cancel = cancelActivePending
-            cancelActivePending = false
+            let cancel = cancelPending
+            cancelPending = []
             let now = Date.now
-            let settings = planner.settings
             let alarmsAvailable = AlarmManager.shared.authorizationState == .authorized
             let alerts = AlertPlanner.alerts(
-                for: planner.events(now: now),
+                for: medications.map { MedicationReminders($0, now: now, language: language) },
                 vibrateOnly: vibrateOnly,
                 alarmsAvailable: alarmsAvailable,
-                refillMessage: settings.pills?.refillMessage(settings.refillReminder, language: language),
-                missedMessage: AlertPlanner.missedMessage(count: planner.outstandingMissed(now: now).count, language: language),
                 language: language
             )
-            let failures = await scheduler.apply(alerts, cancelActive: cancel, snooze: settings.snoozeInterval)
-            if !alarmsAvailable {
+            let failures = await scheduler.apply(alerts, cancelActiveFor: cancel, snooze: TimeInterval(snoozeMinutes * 60))
+            // Screenshot launches (`-screen`) run in the Simulator, which always denies alarms.
+            if medications.isEmpty || UserDefaults.standard.string(forKey: "screen") != nil {
+                scheduleIssue = nil
+            } else if !alarmsAvailable {
                 scheduleIssue = L("Chưa có quyền báo thức nên máy im lặng hay bật Focus sẽ không kêu. Bật trong Cài đặt > Ner's Daily.", "Alarms are not allowed, so nothing rings on silent or in Focus. Turn them on in Settings > Ner's Daily.")
             } else if failures > 0 {
                 scheduleIssue = L("Có \(failures) lần nhắc không hẹn được. Mở lại app để thử lại.", "\(failures) reminders could not be scheduled. Reopen the app to retry.")

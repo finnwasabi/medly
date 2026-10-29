@@ -1,8 +1,9 @@
 import Foundation
 
-/// Stores settings and dose history in a JSON file on the device. No network needed.
+/// Stores every medication with its settings and history in a JSON file on the device. No network needed.
 public struct PlanStore: Sendable {
-    public static let currentVersion = 1
+    /// 1: a single schedule (`settings` and `history`). 2: a list of medications.
+    public static let currentVersion = 2
 
     public let url: URL
 
@@ -10,26 +11,40 @@ public struct PlanStore: Sendable {
         self.url = url
     }
 
-    private struct Stored: Codable {
-        var version: Int
+    private struct Version: Decodable { var version: Int }
+
+    private struct StoredV1: Decodable {
         var settings: ReminderSettings
         var history: [DoseRecord]
     }
 
-    /// Loads the saved state. Without a file it returns default settings and an empty history.
-    /// A corrupt file throws instead of silently wiping history.
-    public func load() throws -> Planner {
-        guard FileManager.default.fileExists(atPath: url.path) else { return Planner() }
-        let stored = try JSONDecoder().decode(Stored.self, from: Data(contentsOf: url))
-        return Planner(settings: stored.settings, history: stored.history)
+    private struct Stored: Codable {
+        var version: Int
+        var medications: [Medication]
+    }
+
+    /// Loads the saved medications. Without a file there are none yet.
+    /// Version 1 becomes one medication with an empty name, which the app fills in its language.
+    /// A corrupt file or an unknown version throws instead of silently wiping history.
+    public func load() throws -> [Medication] {
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        switch try decoder.decode(Version.self, from: data).version {
+        case 1:
+            let old = try decoder.decode(StoredV1.self, from: data)
+            return [Medication(name: "", settings: old.settings, history: old.history)]
+        case 2:
+            return try decoder.decode(Stored.self, from: data).medications
+        case let version:
+            throw CocoaError(.fileReadCorruptFile, userInfo: [NSDebugDescriptionErrorKey: "unknown version \(version)"])
+        }
     }
 
     /// Overwrites the whole state atomically, so a half-written file never exists.
-    public func save(_ planner: Planner) throws {
+    public func save(_ medications: [Medication]) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let data = try JSONEncoder().encode(
-            Stored(version: Self.currentVersion, settings: planner.settings, history: planner.history)
-        )
+        let data = try JSONEncoder().encode(Stored(version: Self.currentVersion, medications: medications))
         #if os(iOS)
         // The "Taken" App Intent runs in the background and must write while the phone is locked.
         try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])

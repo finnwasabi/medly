@@ -4,4 +4,6 @@ import AlarmKit
 nonisolated struct DoseAlarmMetadata: AlarmMetadata {
     /// The widget runs in its own process and cannot read the app's settings, so each alarm carries the language.
     var language = "vi"
+    /// The medication names this alarm is for, already shortened.
+    var names = ""
 }

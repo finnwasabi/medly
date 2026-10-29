@@ -13,6 +13,26 @@ public enum DoseStatus: String, Codable, Sendable {
     case madeUp
 }
 
+extension DoseStatus {
+    /// How bad a status is when several share a day: missed, made up, late, taken, paused.
+    public var severity: Int {
+        switch self {
+        case .missed: 4
+        case .madeUp: 3
+        case .late: 2
+        case .taken: 1
+        case .paused: 0
+        }
+    }
+}
+
+/// Merges several medications' day statuses, keeping the worst status of each day.
+public func mergedDayStatuses(_ days: [[Date: DoseStatus]]) -> [Date: DoseStatus] {
+    days.reduce(into: [:]) { result, statuses in
+        result.merge(statuses) { $0.severity >= $1.severity ? $0 : $1 }
+    }
+}
+
 public struct DoseRecord: Codable, Equatable, Identifiable, Sendable {
     public var id: UUID
     /// The reminder time of this dose.
