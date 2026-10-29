@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- A late dose taken more than 12 hours after its main time now shows on the day of the dose it was late for, in the week strip and the calendar.
+- Changing the main time no longer unlinks earlier make-ups, so a made-up miss does not come back as "not made up".
+
+### Changed
+- The release workflow refuses a tag that is not the tip of `main`, misses commits from `develop` or has no changelog section.
+
 ## [0.1.6] - 2026-10-29
 
 ### Fixed

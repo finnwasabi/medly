@@ -10,7 +10,18 @@ permissions:
   contents: write
 
 jobs:
+  # Fails fast when the tag is not the tip of main, misses commits from develop or has no changelog section,
+  # before any macOS minutes are spent and before anything is published.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        run: git clone -q "https://github.com/$GITHUB_REPOSITORY" . && git checkout -q "$GITHUB_REF_NAME"
+      - name: Check the tag
+        run: scripts/check-release.sh "$GITHUB_REF_NAME"
+
   ipa:
+    needs: verify
     runs-on: macos-26
     steps:
       - name: Checkout
