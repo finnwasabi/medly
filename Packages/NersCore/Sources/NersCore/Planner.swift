@@ -215,6 +215,24 @@ public struct Planner: Sendable {
         return preview
     }
 
+    /// Changes the main time and realigns the pending dose to it. Without this, the 24 h rule would keep reminding at
+    /// the old time forever. Use `previewMainTimeChange` first to warn when the next dose would exceed the maximum gap.
+    public mutating func changeMainTime(hour: Int, minute: Int, now: Date) {
+        settings.mainHour = hour
+        settings.mainMinute = minute
+        guard walk(now: now).followsTake, let last = takes(upTo: now).last,
+              let index = history.firstIndex(where: { $0.id == last.id }) else { return }
+        history[index].nextAtMainTime = true
+    }
+
+    /// What the pending dose would become after `changeMainTime`.
+    public func previewMainTimeChange(hour: Int, minute: Int, now: Date) -> ResetPreview {
+        var copy = self
+        copy.changeMainTime(hour: hour, minute: minute, now: now)
+        let dose = copy.currentDose(now: now)
+        return ResetPreview(dueAt: dose.dueAt, deadlineAt: dose.deadlineAt, exceedsMaxInterval: dose.exceedsMaxInterval)
+    }
+
     /// "Pause reminders for N days" starting at `now`.
     public mutating func pause(days: Int, now: Date) {
         guard days > 0 else { return }
@@ -318,10 +336,13 @@ public struct Planner: Sendable {
         let t = take.takenAt!
         let slot = VietnamClock.firstMainTime(after: t.addingTimeInterval(12 * 3600), hour: settings.mainHour, minute: settings.mainMinute)
         guard take.nextAtMainTime else { return dose(slot: slot, anchor: t) }
+        // Realigned (back to the main time, or the main time changed): the next main time at least 6 h after the take,
+        // so moving the time earlier takes effect tomorrow instead of being swallowed by the 12 h rule.
+        let aligned = VietnamClock.firstMainTime(after: t.addingTimeInterval(6 * 3600), hour: settings.mainHour, minute: settings.mainMinute)
         let normalDeadline = t.addingTimeInterval(maxInterval)
-        let deadline = max(slot, normalDeadline)
-        return Dose(slotAt: slot, dueAt: slot, deadlineAt: deadline, lateUntil: deadline.addingTimeInterval(lateWindow),
-                    exceedsMaxInterval: slot > normalDeadline, anchor: t)
+        let deadline = max(aligned, normalDeadline)
+        return Dose(slotAt: aligned, dueAt: aligned, deadlineAt: deadline, lateUntil: deadline.addingTimeInterval(lateWindow),
+                    exceedsMaxInterval: aligned > normalDeadline, anchor: t)
     }
 
     /// After a miss: the virtual anchor is the deadline that passed (capped at main time + 12 h so it cannot drift),

@@ -13,19 +13,21 @@ struct ProfileView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            Image(systemName: step == 0 ? "person.crop.circle.fill" : "heart.circle.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(Palette.primary)
-                .frame(width: 120, height: 120)
-                .background(Palette.primarySoft, in: Circle())
-            if step == 0 { nameStep } else { partnerStep }
-            Spacer()
-            buttons
+        FullScreenScroll {
+            VStack(spacing: 24) {
+                Spacer()
+                Image(systemName: step == 0 ? "person.crop.circle.fill" : "heart.circle.fill")
+                    .font(.system(size: 56))
+                    .foregroundStyle(Palette.primary)
+                    .frame(width: 120, height: 120)
+                    .background(Palette.primarySoft, in: Circle())
+                if step == 0 { nameStep } else { partnerStep }
+                Spacer()
+                buttons
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 16)
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 16)
         .background(Palette.background)
         .onAppear { focused = true }
     }
@@ -63,7 +65,7 @@ struct ProfileView: View {
                 .padding(.bottom, 8)
             field(L("Tên partner", "Partner's name"), text: $partner)
                 .focused($focused)
-            field(L("Mã kết nối partner gửi (nếu có)", "Connection code from your partner (if any)"), text: $code)
+            field(L("Mã kết nối partner gửi (nếu có)", "Connection code from your partner (if any)"), text: $code, limit: 500)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
             if badCode {
@@ -74,8 +76,8 @@ struct ProfileView: View {
         }
     }
 
-    private func field(_ title: String, text: Binding<String>) -> some View {
-        TextField(title, text: text)
+    private func field(_ title: String, text: Binding<String>, limit: Int = AppModel.nameLimit) -> some View {
+        TextField(title, text: Binding(get: { text.wrappedValue }, set: { text.wrappedValue = String($0.prefix(limit)) }))
             .font(.body)
             .padding(.horizontal, 16)
             .frame(minHeight: 52)

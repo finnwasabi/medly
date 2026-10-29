@@ -266,3 +266,56 @@ import Testing
         #expect(planner.events(now: vn(2026, 10, 28, 8), horizonDays: 2).first?.date == vn(2026, 10, 29, 21))
     }
 }
+
+@Suite struct MainTimeChangeTests {
+    @Test func movingEarlierTakesEffectTomorrow() {
+        var planner = Planner()
+        planner.markTaken(at: vn(2026, 10, 27, 21))
+        let now = vn(2026, 10, 27, 22)
+        let preview = planner.previewMainTimeChange(hour: 8, minute: 0, now: now)
+        #expect(preview.dueAt == vn(2026, 10, 28, 8))
+        #expect(!preview.exceedsMaxInterval)
+        planner.changeMainTime(hour: 8, minute: 0, now: now)
+        #expect(planner.currentDose(now: now).dueAt == vn(2026, 10, 28, 8))
+        #expect(planner.currentDose(now: now).deadlineAt == vn(2026, 10, 28, 21))
+        // From then on it stays at 08:00.
+        planner.markTaken(at: vn(2026, 10, 28, 8))
+        #expect(planner.nextReminder(now: vn(2026, 10, 28, 9)) == vn(2026, 10, 29, 8))
+    }
+
+    @Test func movingLaterWarnsAboutTheMaximumGap() {
+        var planner = Planner()
+        planner.markTaken(at: vn(2026, 10, 27, 21))
+        let now = vn(2026, 10, 27, 22)
+        let preview = planner.previewMainTimeChange(hour: 23, minute: 0, now: now)
+        #expect(preview.dueAt == vn(2026, 10, 28, 23))
+        #expect(preview.exceedsMaxInterval)
+        // Without realigning, the 24 h rule kept it at 21:00.
+        var stuck = planner
+        stuck.settings.mainHour = 23
+        #expect(stuck.nextReminder(now: now) == vn(2026, 10, 28, 21))
+    }
+
+    @Test func changingWithoutHistoryOrWhileOverdueUsesTheNewTime() {
+        var fresh = Planner()
+        fresh.changeMainTime(hour: 7, minute: 30, now: vn(2026, 10, 27, 6))
+        #expect(fresh.nextReminder(now: vn(2026, 10, 27, 6)) == vn(2026, 10, 27, 7, 30))
+
+        var overdue = Planner()
+        overdue.markTaken(at: vn(2026, 10, 25, 21))
+        overdue.changeMainTime(hour: 9, minute: 0, now: vn(2026, 10, 28, 12))
+        #expect(overdue.currentDose(now: vn(2026, 10, 28, 12)).slotAt >= vn(2026, 10, 28, 12).addingTimeInterval(-24 * hour))
+        #expect(overdue.history.allSatisfy { !$0.nextAtMainTime })
+    }
+
+    @Test func backToMainTimeAfterAnEarlyDose() {
+        var planner = Planner()
+        planner.markTaken(at: vn(2026, 10, 27, 15))
+        let now = vn(2026, 10, 27, 15, 1)
+        #expect(planner.currentDose(now: now).dueAt == vn(2026, 10, 28, 15))
+        let preview = planner.resetToMainTime(now: now)
+        #expect(preview?.dueAt == vn(2026, 10, 28, 21))
+        #expect(preview?.exceedsMaxInterval == true)
+        #expect(planner.nextReminder(now: now) == vn(2026, 10, 28, 21))
+    }
+}

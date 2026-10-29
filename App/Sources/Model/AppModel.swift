@@ -32,12 +32,21 @@ final class AppModel {
     /// The main user's name, entered on first launch or in Settings. Sent with the snapshot so the bot uses it.
     // No sync here because this changes on every keystroke; the name goes out with the next sync.
     var userName: String = UserDefaults.standard.string(forKey: "userName") ?? "" {
-        didSet { UserDefaults.standard.set(userName, forKey: "userName") }
+        didSet {
+            if userName.count > Self.nameLimit { userName = String(userName.prefix(Self.nameLimit)) }
+            UserDefaults.standard.set(userName, forKey: "userName")
+        }
     }
+
+    /// Names are capped so greetings and sentences stay readable.
+    static let nameLimit = 40
 
     /// The partner's name, optional.
     var partnerName: String = UserDefaults.standard.string(forKey: "partnerName") ?? "" {
-        didSet { UserDefaults.standard.set(partnerName, forKey: "partnerName") }
+        didSet {
+            if partnerName.count > Self.nameLimit { partnerName = String(partnerName.prefix(Self.nameLimit)) }
+            UserDefaults.standard.set(partnerName, forKey: "partnerName")
+        }
     }
 
     /// Greeting with the user's name, or a neutral one without it.

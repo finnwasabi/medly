@@ -149,3 +149,20 @@ extension DoseStatus {
         }
     }
 }
+
+/// A full-height screen that still scrolls when large text or the keyboard needs more room.
+/// Spacers inside keep their centering at normal sizes because the content is at least as tall as the screen.
+struct FullScreenScroll<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        GeometryReader { proxy in
+            ScrollView {
+                content
+                    .frame(minHeight: proxy.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
+        }
+    }
+}

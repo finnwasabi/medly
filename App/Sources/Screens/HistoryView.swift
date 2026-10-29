@@ -41,6 +41,8 @@ struct HistoryView: View {
             Divider().frame(height: 40)
             stat(value: planner.missedCount(now: now) - planner.madeUpCount(now: now), label: L("viên hụt", "missed"), color: DoseStatus.missed.foreground)
         }
+        // Four columns: cap the text size so labels never break mid-word.
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .card()
     }
 
@@ -52,6 +54,9 @@ struct HistoryView: View {
             Text(label)
                 .font(.footnote)
                 .foregroundStyle(Palette.textSecondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
     }
@@ -90,6 +95,8 @@ struct HistoryView: View {
                     dayCell(day: day, status: days[date].map(DoseStatus.init), isToday: date == today)
                 }
             }
+            // A 7-column grid has a fixed width budget.
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
             legend
         }
         .card()
@@ -119,6 +126,7 @@ struct HistoryView: View {
                     .foregroundStyle(status.foreground)
             }
         }
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .padding(.top, 4)
     }
 
