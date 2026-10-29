@@ -173,8 +173,8 @@ import Testing
         planner.markTaken(at: vn(2026, 10, 27, 21, 5))
         #expect(planner.snoozeUntil(now: vn(2026, 10, 28, 21)) == vn(2026, 10, 28, 21, 5))
         planner.markTaken(at: vn(2026, 10, 28, 23))
-        #expect(planner.snoozeUntil(now: vn(2026, 10, 29, 21)) == vn(2026, 10, 29, 21, 10))
-        #expect(planner.currentDose(now: vn(2026, 10, 29, 21, 10)).deadlineAt == vn(2026, 10, 29, 23))
+        #expect(planner.snoozeUntil(now: vn(2026, 10, 29, 21)) == vn(2026, 10, 29, 21, 9))
+        #expect(planner.currentDose(now: vn(2026, 10, 29, 21, 9)).deadlineAt == vn(2026, 10, 29, 23))
     }
 
     @Test func eventsSortedUniqueAndWithinHorizon() {

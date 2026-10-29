@@ -27,9 +27,11 @@ public struct PausePeriod: Codable, Equatable, Sendable {
 
 /// Reminder settings. All intervals are in seconds.
 public struct ReminderSettings: Codable, Equatable, Sendable {
-    /// Main time in Vietnam time.
+    /// Main time in Vietnam time. With several doses a day, the first one; the others follow every `period`.
     public var mainHour: Int
     public var mainMinute: Int
+    /// Doses per day, evenly spaced. One of `allowedDosesPerDay`.
+    public var dosesPerDay: Int
     /// Maximum gap between two consecutive doses.
     public var maxInterval: TimeInterval
     /// How many repeats follow the main reminder, and their spacing.
@@ -60,13 +62,14 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
     public init(
         mainHour: Int = 21,
         mainMinute: Int = 0,
+        dosesPerDay: Int = 1,
         maxInterval: TimeInterval = 24 * 3600,
         repeatCount: Int = 3,
         repeatInterval: TimeInterval = 5 * 60,
         hourlyInterval: TimeInterval = 3600,
         finalWindow: TimeInterval = 2 * 3600,
         finalInterval: TimeInterval = 15 * 60,
-        snoozeInterval: TimeInterval = 10 * 60,
+        snoozeInterval: TimeInterval = 9 * 60,
         undoWindow: TimeInterval = 10 * 60,
         lateWindow: TimeInterval = 12 * 3600,
         lateTolerance: TimeInterval = 15 * 60,
@@ -77,6 +80,7 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
     ) {
         self.mainHour = mainHour
         self.mainMinute = mainMinute
+        self.dosesPerDay = Self.allowedDosesPerDay.contains(dosesPerDay) ? dosesPerDay : 1
         self.maxInterval = maxInterval
         self.repeatCount = repeatCount
         self.repeatInterval = repeatInterval
@@ -93,6 +97,15 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         self.pauses = pauses
     }
 
+    /// Divisors of 24, so the doses fall on the same clock times every day.
+    public static let allowedDosesPerDay = [1, 2, 3, 4, 6]
+
+    /// Time between two scheduled doses: 24 h divided by `dosesPerDay`.
+    public var period: TimeInterval { 24 * 3600 / TimeInterval(dosesPerDay) }
+
+    /// The range the maximum gap may be set to: from one period up to one and a half.
+    public var maxIntervalRange: ClosedRange<TimeInterval> { period...(period * 1.5) }
+
     /// When the pause ends, if `now` is inside one.
     public func pausedUntil(now: Date) -> Date? {
         pauses.filter { $0.contains(now) }.map(\.end).max()
@@ -104,6 +117,8 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         let d = ReminderSettings()
         mainHour = try c.decodeIfPresent(Int.self, forKey: .mainHour) ?? d.mainHour
         mainMinute = try c.decodeIfPresent(Int.self, forKey: .mainMinute) ?? d.mainMinute
+        let doses = try c.decodeIfPresent(Int.self, forKey: .dosesPerDay) ?? d.dosesPerDay
+        dosesPerDay = Self.allowedDosesPerDay.contains(doses) ? doses : d.dosesPerDay
         maxInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .maxInterval) ?? d.maxInterval
         repeatCount = try c.decodeIfPresent(Int.self, forKey: .repeatCount) ?? d.repeatCount
         repeatInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .repeatInterval) ?? d.repeatInterval

@@ -12,7 +12,8 @@ import Testing
 
     @Test func soundModeUsesAlarmsForEverything() {
         let alerts = AlertPlanner.alerts(for: events, vibrateOnly: false, refillMessage: nil)
-        #expect(alerts.count == events.count)
+        #expect(alerts.count == min(events.count, AlertPlanner.alarmLimit))
+        #expect(events.count > AlertPlanner.alarmLimit)
         #expect(alerts.allSatisfy { $0.usesAlarm })
         #expect(alerts.first?.title == "Tới giờ uống thuốc")
         #expect(alerts.first?.date == vn(2026, 10, 2, 21))
@@ -22,7 +23,7 @@ import Testing
         let alerts = AlertPlanner.alerts(for: events, vibrateOnly: true, refillMessage: nil)
         let deadlines = events.filter(\.requiresSound).map(\.date)
         #expect(!deadlines.isEmpty)
-        #expect(alerts.filter(\.usesAlarm).map(\.date) == deadlines)
+        #expect(alerts.filter(\.usesAlarm).map(\.date) == Array(deadlines.prefix(AlertPlanner.alarmLimit)))
         #expect(alerts.filter { !$0.usesAlarm }.count == AlertPlanner.notificationLimit)
     }
 
@@ -57,7 +58,7 @@ import Testing
             for: planner.events(now: vn(2026, 10, 1, 23, 1)), vibrateOnly: false,
             refillMessage: PillCounter(count: 1, at: vn(2026, 10, 1, 8)).refillMessage(RefillReminder(), language: .en),
             missedMessage: AlertPlanner.missedMessage(count: 2, language: .en), language: .en)
-        #expect(alerts.first?.title == "Time to take your pill. 2 missed pills not made up. 1 pill left, time to buy more")
+        #expect(alerts.first?.title == "Time to take your pill. 2 missed doses not made up. 1 pill left, time to buy more")
         #expect(alerts.first?.body == "Deadline 23:00 VN time.")
         #expect(TimeFormatting.vietnamTime(vn(2026, 10, 1, 21), language: .en) == "21:00 VN time")
     }

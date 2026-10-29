@@ -27,3 +27,10 @@ struct SeededGenerator: RandomNumberGenerator {
 func takenRecord(_ date: Date) -> DoseRecord {
     DoseRecord(scheduledAt: date, takenAt: date, status: .taken)
 }
+
+extension Planner {
+    /// The snapshot of this schedule as a single unnamed medication.
+    func snapshot(now: Date) -> MedicationSnapshot {
+        Medication(name: "", settings: settings, history: history).snapshot(now: now)
+    }
+}
