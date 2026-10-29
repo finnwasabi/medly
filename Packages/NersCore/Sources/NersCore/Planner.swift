@@ -90,8 +90,14 @@ public struct Planner: Sendable {
         var unused = history.filter { $0.status == .madeUp && ($0.takenAt ?? .distantFuture) <= now }
         var matched = 0
         for i in records.indices where records[i].status == .missed {
-            guard let k = unused.firstIndex(where: { $0.makesUpFor == records[i].scheduledAt }) else { continue }
+            // The nearest make-up within 12 h, not an exact match: changing the main time recomputes the reminder time
+            // of past misses, and the make-up must stay linked to its miss.
+            let missedAt = records[i].scheduledAt
+            let distance = { (record: DoseRecord) in record.makesUpFor.map { abs($0.timeIntervalSince(missedAt)) } ?? .infinity }
+            guard let k = unused.indices.min(by: { distance(unused[$0]) < distance(unused[$1]) }),
+                  distance(unused[k]) < 12 * 3600 else { continue }
             records[i] = unused.remove(at: k)
+            records[i].scheduledAt = missedAt
             matched += 1
         }
         records += unused
@@ -114,8 +120,9 @@ public struct Planner: Sendable {
         var result: [Date: DoseStatus] = [:]
         for record in timeline(now: now) {
             // Each record belongs to its nearest main time, the same rule that picks the next dose after a take.
-            // A make-up belongs to the day of the miss it covers, not the day it was taken.
-            let moment = record.status == .madeUp ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
+            // A make-up belongs to the day of the miss it covers and a late dose to the day of the dose it was late for,
+            // not the day they were taken.
+            let moment = record.status == .madeUp || record.status == .late ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
             let slot = VietnamClock.firstMainTime(after: moment.addingTimeInterval(-12 * 3600), hour: settings.mainHour, minute: settings.mainMinute)
             let day = VietnamClock.calendar.startOfDay(for: slot)
             if let existing = result[day], rank(existing) >= rank(record.status) { continue }
@@ -287,6 +294,7 @@ public struct Planner: Sendable {
             if take.takenAt! > state.dose.deadlineAt.addingTimeInterval(max(0, settings.lateTolerance)) {
                 var record = take
                 record.status = .late
+                record.scheduledAt = state.dose.dueAt
                 state.records.append(record)
                 state.late += 1
             } else {

@@ -36,8 +36,10 @@ Release tags (`v*`) can only be created by the maintainer.
 
 ## Releases (maintainer)
 
-1. Merge `develop` into `main` through a pull request.
-2. Move **Unreleased** in the changelog to the new version.
-3. Tag `main` with `vX.Y.Z`. GitHub Actions builds the `.ipa`, generates `source.json` and publishes the release, so SideStore users get the update.
+1. On `develop`, move **Unreleased** in the changelog to the new version through a pull request.
+2. Merge `develop` into `main` through a pull request, and wait until it is actually merged.
+3. Tag the tip of `main` with `vX.Y.Z`. GitHub Actions builds the `.ipa`, generates `source.json` and publishes the release, so SideStore users get the update.
+
+The release workflow first runs `scripts/check-release.sh` and refuses the tag unless it is the tip of `main`, contains everything on `develop`, and the changelog has a `## [X.Y.Z]` section. Run it locally before pushing the tag: `git fetch origin && scripts/check-release.sh vX.Y.Z`.
 
 By contributing you agree that your work is released under the [MIT License](LICENSE) and that you follow the [Code of Conduct](CODE_OF_CONDUCT.md).
