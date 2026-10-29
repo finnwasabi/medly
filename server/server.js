@@ -4,6 +4,11 @@ import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
+import { setDefaultAutoSelectFamilyAttemptTimeout } from 'node:net';
+
+// Node tries each address family for only 250 ms by default. On a host without IPv6 and about 200 ms from Telegram,
+// that aborts the IPv4 attempt about half the time ("fetch failed", ETIMEDOUT). Two seconds is plenty.
+setDefaultAutoSelectFamilyAttemptTimeout(2000);
 
 const VN_OFFSET_MS = 7 * 3600 * 1000;
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -404,7 +409,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`listening on ${env.PORT ?? 8787}, bot ${bot ? 'on' : 'off (BOT_TOKEN or CHAT_ID missing)'}`);
   });
   if (bot) {
-    bot.setProfile().catch((e) => console.error('profile', e.message));
+    // Retried, because a failure here would leave the old command menu in Telegram until the next restart.
+    const profile = (attempt = 1) => bot.setProfile().catch((e) => {
+      console.error('profile', e.message);
+      if (attempt < 10) setTimeout(() => profile(attempt + 1), 30 * 1000);
+    });
+    profile();
     bot.poll();
     setInterval(() => bot.dailyReport().catch((e) => console.error('report', e.message)), 60 * 1000);
   }
