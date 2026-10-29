@@ -9,6 +9,8 @@ public enum DoseStatus: String, Codable, Sendable {
     case missed
     /// Rơi vào khoảng tạm dừng, không tính hụt. Chỉ xuất hiện trong `Planner.timeline`.
     case paused
+    /// Uống bù cho một lần đã hụt. Được lưu trong lịch sử nhưng không tính vào lịch nhắc.
+    case madeUp
 }
 
 public struct DoseRecord: Codable, Equatable, Identifiable, Sendable {
@@ -22,6 +24,8 @@ public struct DoseRecord: Codable, Equatable, Identifiable, Sendable {
     public var consumedPill: Bool
     /// Người dùng chọn "về lại giờ gốc" cho lần kế sau lần uống này.
     public var nextAtMainTime: Bool
+    /// Với lần uống bù: `scheduledAt` của lần hụt được bù.
+    public var makesUpFor: Date?
 
     public init(
         id: UUID = UUID(),
@@ -29,7 +33,8 @@ public struct DoseRecord: Codable, Equatable, Identifiable, Sendable {
         takenAt: Date?,
         status: DoseStatus,
         consumedPill: Bool = false,
-        nextAtMainTime: Bool = false
+        nextAtMainTime: Bool = false,
+        makesUpFor: Date? = nil
     ) {
         self.id = id
         self.scheduledAt = scheduledAt
@@ -37,5 +42,6 @@ public struct DoseRecord: Codable, Equatable, Identifiable, Sendable {
         self.status = status
         self.consumedPill = consumedPill
         self.nextAtMainTime = nextAtMainTime
+        self.makesUpFor = makesUpFor
     }
 }

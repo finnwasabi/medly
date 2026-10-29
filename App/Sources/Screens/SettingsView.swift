@@ -100,9 +100,6 @@ struct SettingsView: View {
                 }
 
                 Section("Ứng dụng") {
-                    if let expiration = SigningInfo.expiration {
-                        LabeledContent("Chữ ký hết hạn", value: "\(TodayText.dayTitle(expiration)), \(TimeFormatting.vietnamTime(expiration))")
-                    }
                     LabeledContent("Phiên bản", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                 }
             }

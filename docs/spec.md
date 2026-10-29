@@ -46,6 +46,11 @@ Tài liệu này là nguồn chuẩn cho logic nhắc uống thuốc và hợp �
 - **Trễ** = uống sau hạn chót quá 15 phút (dung sai, chỉnh được, để chênh vài giây hay vài phút không thành trễ)
   nhưng còn trong cửa sổ trễ. Vẫn tính là đã uống, lần kế tính từ lúc uống.
 - **Hụt** = qua hết cửa sổ trễ mà không có xác nhận. Đếm trên máy, không cần mạng.
+- **Uống bù** = đánh dấu đã uống thêm một viên cho một lần hụt (nút "Đã uống bù" trên màn Hôm nay, hiện các lần hụt
+  trong 7 ngày gần nhất). Trừ một viên nếu đang đếm, không đổi lịch nhắc, mỗi lần hụt chỉ bù được một lần, bấm nhầm thì
+  xoá trong Lịch sử (trả lại viên). App không khuyên có nên bù hay không, chỉ trỏ về tờ hướng dẫn thuốc. Còn lần hụt chưa
+  bù thì mỗi lần báo kèm dòng "còn N viên hụt chưa uống bù".
+- Màu: xanh lá đúng giờ, vàng trễ, xanh dương hụt đã uống bù, đỏ hụt, xám tạm dừng. Luôn kèm chữ và biểu tượng.
 - `daysTaken` = số lần đã uống kể từ lần nhập hoặc thêm viên gần nhất (khi không đếm viên: kể từ lúc cài).
 
 ## Đồng bộ (không phụ thuộc mạng)
@@ -68,17 +73,17 @@ bản cũ hơn bị bỏ qua (trả 200 kèm `"stale": true`).
   "daysTaken": 12,
   "missedCount": 1,
   "lateCount": 0,
+  "madeUpCount": 0,
   "pillsTotal": 28,
   "pillsRemaining": 16,
   "refillReminder": { "enabled": true, "daysBefore": 7 },
-  "pausedUntil": null,
-  "signatureExpiresAt": "2026-11-03T14:03:00Z"
+  "pausedUntil": null
 }
 ```
 
 - Mọi mốc giờ là UTC ISO 8601 không có phần lẻ giây. `pillsTotal`, `pillsRemaining` là `null` khi không đếm viên.
-  `lastTakenAt`, `pausedUntil`, `signatureExpiresAt` có thể `null`. `signatureExpiresAt` là lúc chữ ký của app hết hạn
-  (SideStore ký 7 ngày), để bot nhắc làm mới. Bản app cũ không gửi `lateCount`, `signatureExpiresAt`: server coi như 0 và `null`.
+  `lastTakenAt`, `pausedUntil` có thể `null`. `missedCount` đếm mọi lần hụt, kể cả lần đã bù; `madeUpCount` là số lần đã bù.
+  Bản app cũ không gửi `lateCount`, `madeUpCount`: server coi như 0.
 - `GET /v1/snapshot` (cùng token) trả bản mới nhất, 404 nếu chưa có.
 
 ## Bot Telegram

@@ -30,17 +30,6 @@ nonisolated struct ReminderScheduler: Sendable {
         let center = UNUserNotificationCenter.current()
         center.removeAllPendingNotificationRequests()
         if cancelActive { center.removeAllDeliveredNotifications() }
-        // Nhắc làm mới chữ ký trước 1 ngày và 2 giờ.
-        if let expiration = SigningInfo.expiration {
-            for lead: TimeInterval in [24 * 3600, 2 * 3600] where expiration.timeIntervalSinceNow - lead >= 1 {
-                let content = UNMutableNotificationContent()
-                content.title = "Ner's Daily sắp hết hạn"
-                content.body = "Mở SideStore và bấm làm mới, không thì app ngừng nhắc uống thuốc."
-                content.sound = .default
-                let trigger = UNTimeIntervalNotificationTrigger(timeInterval: expiration.timeIntervalSinceNow - lead, repeats: false)
-                try? await center.add(UNNotificationRequest(identifier: "signature-\(Int(lead))", content: content, trigger: trigger))
-            }
-        }
         for alert in alerts where !alert.usesAlarm {
             let interval = alert.date.timeIntervalSinceNow
             guard interval >= 1 else { continue }

@@ -84,9 +84,7 @@ final class AppModel {
     func sync() async {
         guard shareEnabled, let connection else { return }
         do {
-            var snapshot = planner.snapshot(now: .now)
-            snapshot.signatureExpiresAt = SigningInfo.expiration
-            let reply = try await syncClient.send(snapshot, to: connection)
+            let reply = try await syncClient.send(planner.snapshot(now: .now), to: connection)
             message = reply.message
             UserDefaults.standard.set(reply.message, forKey: "message")
             lastSync = .now
@@ -112,6 +110,11 @@ final class AppModel {
         guard planner.undoLastTaken(now: now) else { return }
         persist()
         await resync()
+    }
+
+    /// Bấm "Đã uống bù" cho một lần hụt.
+    func markMadeUp(missedAt scheduledAt: Date) {
+        update { $0.markMadeUp(missedAt: scheduledAt, at: .now) }
     }
 
     /// Mọi thay đổi cài đặt, số viên, tạm dừng, sửa giờ uống đi qua đây: lưu rồi nạp lại lịch nhắc.
@@ -155,7 +158,8 @@ final class AppModel {
                 for: planner.events(now: now),
                 vibrateOnly: vibrateOnly,
                 alarmsAvailable: alarmsAvailable,
-                refillMessage: settings.pills?.refillMessage(settings.refillReminder)
+                refillMessage: settings.pills?.refillMessage(settings.refillReminder),
+                missedMessage: AlertPlanner.missedMessage(count: planner.outstandingMissed(now: now).count)
             )
             let failures = await scheduler.apply(alerts, cancelActive: cancel, snooze: settings.snoozeInterval)
             if !alarmsAvailable {

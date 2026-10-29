@@ -37,7 +37,9 @@ struct HistoryView: View {
             Divider().frame(height: 40)
             stat(value: planner.lateCount(now: now), label: "lần trễ", color: DoseStatus.late.foreground)
             Divider().frame(height: 40)
-            stat(value: planner.missedCount(now: now), label: "viên hụt", color: DoseStatus.missed.foreground)
+            stat(value: planner.madeUpCount(now: now), label: "uống bù", color: DoseStatus.madeUp.foreground)
+            Divider().frame(height: 40)
+            stat(value: planner.missedCount(now: now) - planner.madeUpCount(now: now), label: "viên hụt", color: DoseStatus.missed.foreground)
         }
         .card()
     }
@@ -109,14 +111,21 @@ struct HistoryView: View {
     }
 
     private var legend: some View {
-        HStack(spacing: 12) {
-            ForEach([DoseStatus.taken, .late, .missed, .paused], id: \.self) { status in
+        // Hai hàng để vừa màn hẹp.
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), alignment: .leading)], alignment: .leading, spacing: 6) {
+            ForEach([DoseStatus.taken, .late, .madeUp, .missed, .paused], id: \.self) { status in
                 Label(status.label, systemImage: status.icon)
                     .font(.caption)
                     .foregroundStyle(status.foreground)
             }
         }
         .padding(.top, 4)
+    }
+
+    private func entryDetail(_ record: DoseRecord) -> String {
+        guard let takenAt = record.takenAt else { return "giờ uống \(TimeFormatting.vietnamTime(record.scheduledAt))" }
+        if record.status == .madeUp { return "uống bù lúc \(TimeFormatting.vietnamTime(takenAt)), \(TodayText.dayTitle(takenAt))" }
+        return TimeFormatting.vietnamTime(takenAt)
     }
 
     private func entriesCard(_ records: [DoseRecord]) -> some View {
@@ -137,10 +146,10 @@ struct HistoryView: View {
                 } label: {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(TodayText.dayTitle(record.takenAt ?? record.scheduledAt))
+                            Text(TodayText.dayTitle(record.status == .madeUp ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)))
                                 .font(.body.weight(.medium))
                                 .foregroundStyle(Palette.text)
-                            Text(record.takenAt.map { TimeFormatting.vietnamTime($0) } ?? "giờ uống \(TimeFormatting.vietnamTime(record.scheduledAt))")
+                            Text(entryDetail(record))
                                 .font(.footnote)
                                 .foregroundStyle(Palette.textSecondary)
                         }
@@ -169,12 +178,24 @@ struct EditTakenTimeSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var date = Date.now
+    @State private var confirmRemove = false
 
     var body: some View {
         NavigationStack {
             Form {
                 DatePicker("Giờ uống (giờ VN)", selection: $date, in: ...Date.now)
                     .environment(\.timeZone, VietnamClock.timeZone)
+                if record.status == .madeUp {
+                    Button("Xoá lần uống bù", role: .destructive) { confirmRemove = true }
+                }
+            }
+            .confirmationDialog("Xoá lần uống bù này?", isPresented: $confirmRemove, titleVisibility: .visible) {
+                Button("Xoá", role: .destructive) {
+                    model.update { $0.removeRecord(id: record.id) }
+                    dismiss()
+                }
+            } message: {
+                Text("Lần đó sẽ hiện lại là hụt. Nếu đang đếm viên thì được trả lại một viên.")
             }
             .navigationTitle("Sửa giờ uống")
             .navigationBarTitleDisplayMode(.inline)
