@@ -31,12 +31,12 @@ targets:
         CFBundleDisplayName: "Ner's Daily"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        CFBundleDevelopmentRegion: vi
+        CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [vi, en]
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSSupportsLiveActivities: true
-        NSAlarmKitUsageDescription: "Ner's Daily cần đặt báo thức để nhắc bạn uống thuốc đúng giờ, kể cả khi máy đang im lặng."
+        NSAlarmKitUsageDescription: "Ner's Daily sets alarms to remind you to take your pill on time, even when your phone is on silent."
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.finnwasabi.nersdaily
@@ -53,6 +53,7 @@ targets:
       path: App/Widget/Info.plist
       properties:
         CFBundleDisplayName: "Ner's Daily"
+        CFBundleDevelopmentRegion: en
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:

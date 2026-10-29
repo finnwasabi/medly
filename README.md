@@ -90,6 +90,10 @@ https://github.com/finnwasabi/ners-daily/releases/latest/download/source.json
 
 The app only keeps time. It gives no medical advice: for how to take or make up a pill, check the leaflet or ask a doctor or pharmacist.
 
+## Roadmap
+
+See the [open issues](https://github.com/finnwasabi/ners-daily/issues) and the [changelog](CHANGELOG.md). Ideas and pull requests are welcome.
+
 ## License
 
 [MIT](LICENSE) © Lê Nhật Tùng

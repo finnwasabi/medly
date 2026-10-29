@@ -6,7 +6,7 @@ Please **do not open a public issue** for security problems.
 Use GitHub's private reporting instead: **Security > Report a vulnerability** on this repository.
 
 Include what is affected (the app, the sync server or the release pipeline), steps to reproduce, and the impact you expect.
-You will get a reply within 7 days. Fixes ship in the next release, and you are credited unless you prefer otherwise.
+Reports in English or Vietnamese are both fine. You will get a reply within 7 days. Fixes ship in the next release, and you are credited unless you prefer otherwise.
 
 ## Scope
 
