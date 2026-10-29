@@ -5,6 +5,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Server: calls to Telegram no longer fail about half the time on hosts without IPv6, and setting the command menu is retried.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added
