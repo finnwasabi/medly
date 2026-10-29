@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-29
+
 ### Added
 - "Back to the main time" on the Today screen after an early dose pulled the schedule earlier, with a warning when the next dose would exceed 24 hours.
 - The bot speaks English with `BOT_LANGUAGE=en`.
@@ -49,7 +51,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/ners-daily/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/finnwasabi/ners-daily/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/finnwasabi/ners-daily/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/finnwasabi/ners-daily/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/finnwasabi/ners-daily/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/finnwasabi/ners-daily/releases/tag/v0.1.0
