@@ -24,12 +24,12 @@ enum DoseStatus {
 
     var label: String {
         switch self {
-        case .taken: "Đã uống"
-        case .late: "Uống trễ"
-        case .madeUp: "Uống bù"
-        case .missed: "Hụt"
-        case .paused: "Tạm dừng"
-        case .upcoming: "Sắp tới"
+        case .taken: L("Đã uống", "Taken")
+        case .late: L("Uống trễ", "Late")
+        case .madeUp: L("Uống bù", "Made up")
+        case .missed: L("Hụt", "Missed")
+        case .paused: L("Tạm dừng", "Paused")
+        case .upcoming: L("Sắp tới", "Upcoming")
         }
     }
 

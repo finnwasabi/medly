@@ -28,8 +28,8 @@ nonisolated struct SyncClient: Sendable {
         case status(Int)
         var errorDescription: String? {
             switch self {
-            case .status(401): "Mã kết nối sai, xin mã mới bằng lệnh /link."
-            case .status(let code): "Server trả lỗi \(code)."
+            case .status(401): L("Mã kết nối sai, xin mã mới bằng lệnh /link.", "Wrong connection code, get a new one with /link.")
+            case .status(let code): L("Server trả lỗi \(code).", "Server error \(code).")
             }
         }
     }

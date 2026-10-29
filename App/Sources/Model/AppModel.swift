@@ -19,6 +19,14 @@ final class AppModel {
     /// Lời nhắn mới nhất Tùng gửi qua bot, nhận về khi đồng bộ.
     private(set) var message: String? = UserDefaults.standard.string(forKey: "message")
 
+    /// Ngôn ngữ chữ trong app, noti và báo thức. Đổi là hẹn lại toàn bộ để chữ báo theo ngôn ngữ mới.
+    var language: Language = AppLanguage.current {
+        didSet {
+            UserDefaults.standard.set(language.rawValue, forKey: AppLanguage.key)
+            Task { await resync() }
+        }
+    }
+
     /// Chỉ rung: các lần nhắc là noti thường theo chế độ máy, riêng hạn chót vẫn là báo thức có tiếng.
     var vibrateOnly: Bool {
         didSet {
@@ -56,7 +64,7 @@ final class AppModel {
             let backup = directory.appending(path: "state-corrupt-\(Int(Date.now.timeIntervalSince1970)).json")
             try? FileManager.default.moveItem(at: store.url, to: backup)
             planner = Planner()
-            dataIssue = "Không đọc được dữ liệu cũ, đã cất vào \(backup.lastPathComponent). App chạy lại từ cài đặt mặc định."
+            dataIssue = L("Không đọc được dữ liệu cũ, đã cất vào \(backup.lastPathComponent). App chạy lại từ cài đặt mặc định.", "Could not read old data, saved it as \(backup.lastPathComponent). The app restarted with default settings.")
         }
         // Có mạng trở lại (xuống máy bay) thì gửi bản mới nhất.
         network.pathUpdateHandler = { path in
@@ -91,7 +99,7 @@ final class AppModel {
             UserDefaults.standard.set(lastSync, forKey: "lastSync")
             syncIssue = nil
         } catch {
-            syncIssue = "Chưa đồng bộ được: \(error.localizedDescription) App sẽ gửi lại khi có mạng."
+            syncIssue = L("Chưa đồng bộ được: \(error.localizedDescription) App sẽ gửi lại khi có mạng.", "Not synced yet: \(error.localizedDescription) The app retries when online.")
         }
     }
 
@@ -128,7 +136,7 @@ final class AppModel {
         do {
             try store.save(planner)
         } catch {
-            dataIssue = "Không lưu được lần uống: \(error.localizedDescription)"
+            dataIssue = L("Không lưu được lần uống: \(error.localizedDescription)", "Could not save the dose: \(error.localizedDescription)")
         }
     }
 
@@ -158,14 +166,15 @@ final class AppModel {
                 for: planner.events(now: now),
                 vibrateOnly: vibrateOnly,
                 alarmsAvailable: alarmsAvailable,
-                refillMessage: settings.pills?.refillMessage(settings.refillReminder),
-                missedMessage: AlertPlanner.missedMessage(count: planner.outstandingMissed(now: now).count)
+                refillMessage: settings.pills?.refillMessage(settings.refillReminder, language: language),
+                missedMessage: AlertPlanner.missedMessage(count: planner.outstandingMissed(now: now).count, language: language),
+                language: language
             )
             let failures = await scheduler.apply(alerts, cancelActive: cancel, snooze: settings.snoozeInterval)
             if !alarmsAvailable {
-                scheduleIssue = "Chưa có quyền báo thức nên máy im lặng hay bật Focus sẽ không kêu. Bật trong Cài đặt > Ner's Daily."
+                scheduleIssue = L("Chưa có quyền báo thức nên máy im lặng hay bật Focus sẽ không kêu. Bật trong Cài đặt > Ner's Daily.", "Alarms are not allowed, so nothing rings on silent or in Focus. Turn them on in Settings > Ner's Daily.")
             } else if failures > 0 {
-                scheduleIssue = "Có \(failures) lần nhắc không hẹn được. Mở lại app để thử lại."
+                scheduleIssue = L("Có \(failures) lần nhắc không hẹn được. Mở lại app để thử lại.", "\(failures) reminders could not be scheduled. Reopen the app to retry.")
             } else {
                 scheduleIssue = nil
             }

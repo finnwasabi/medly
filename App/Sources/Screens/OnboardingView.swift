@@ -18,23 +18,23 @@ struct OnboardingView: View {
                 .frame(width: 128, height: 128)
                 .background(Palette.primarySoft, in: Circle())
             VStack(spacing: 12) {
-                Text("Nhắc uống thuốc đúng giờ")
+                Text(L("Nhắc uống thuốc đúng giờ", "Take your pill on time"))
                     .font(.title.bold())
                     .foregroundStyle(Palette.text)
                     .multilineTextAlignment(.center)
-                Text("Ner's Daily đặt báo thức theo giờ Việt Nam, kêu cả khi máy đang im lặng hay bật Focus.")
+                Text(L("Ner's Daily đặt báo thức theo giờ Việt Nam, kêu cả khi máy đang im lặng hay bật Focus.", "Ner's Daily sets alarms on Vietnam time that ring even when the phone is on silent or in Focus."))
                     .font(.body)
                     .foregroundStyle(Palette.textSecondary)
                     .multilineTextAlignment(.center)
             }
             VStack(alignment: .leading, spacing: 14) {
-                point(icon: "globe.asia.australia.fill", text: "Bay đi đâu cũng nhắc đúng giờ VN")
-                point(icon: "bell.and.waves.left.and.right.fill", text: "Nhắc lại tới khi bạn bấm Đã uống")
-                point(icon: "airplane", text: "Không cần mạng, chế độ máy bay vẫn nhắc")
+                point(icon: "globe.asia.australia.fill", text: L("Bay đi đâu cũng nhắc đúng giờ VN", "On Vietnam time wherever you fly"))
+                point(icon: "bell.and.waves.left.and.right.fill", text: L("Nhắc lại tới khi bạn bấm Đã uống", "Keeps reminding until you tap Taken"))
+                point(icon: "airplane", text: L("Không cần mạng, chế độ máy bay vẫn nhắc", "No internet needed, works in airplane mode"))
             }
             .card()
             Spacer()
-            Button("Cho phép báo thức") {
+            Button(L("Cho phép báo thức", "Allow alarms")) {
                 asking = true
                 Task {
                     // Từ chối vẫn cho vào app; màn Hôm nay sẽ báo lỗi hẹn nhắc.
@@ -46,7 +46,7 @@ struct OnboardingView: View {
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(asking)
-            Text("Máy sẽ hỏi hai lần: báo thức và thông báo.")
+            Text(L("Máy sẽ hỏi hai lần: báo thức và thông báo.", "Your phone asks twice: alarms and notifications."))
                 .font(.footnote)
                 .foregroundStyle(Palette.textSecondary)
         }

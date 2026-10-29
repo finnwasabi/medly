@@ -16,107 +16,111 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    DatePicker("Giờ uống (giờ VN)", selection: mainTime, displayedComponents: .hourAndMinute)
+                    DatePicker(L("Giờ uống (giờ VN)", "Pill time (VN time)"), selection: mainTime, displayedComponents: .hourAndMinute)
                         .environment(\.timeZone, VietnamClock.timeZone)
                     if let local = TodayText.localLine(VietnamClock.calendar.date(bySettingHour: settings.mainHour, minute: settings.mainMinute, second: 0, of: now)!) {
-                        LabeledContent("Ở nơi đang đứng", value: local)
+                        LabeledContent(L("Ở nơi đang đứng", "Where you are"), value: local)
                     }
-                    LabeledContent("Cách nhau tối đa", value: TodayText.duration(settings.maxInterval))
+                    LabeledContent(L("Cách nhau tối đa", "Max gap between doses"), value: TodayText.duration(settings.maxInterval))
                 } header: {
-                    Text("Lịch uống")
+                    Text(L("Lịch uống", "Schedule"))
                 } footer: {
-                    Text("Giờ uống luôn tính theo giờ Việt Nam, dù máy đang ở múi giờ nào.")
+                    Text(L("Giờ uống luôn tính theo giờ Việt Nam, dù máy đang ở múi giờ nào.", "Pill time always follows Vietnam time, whatever time zone the phone is in."))
                 }
 
                 Section {
-                    Picker("Âm thanh", selection: $model.vibrateOnly) {
-                        Text("Có tiếng").tag(false)
-                        Text("Theo chế độ máy").tag(true)
+                    Picker(L("Âm thanh", "Sound"), selection: $model.vibrateOnly) {
+                        Text(L("Có tiếng", "Always ring")).tag(false)
+                        Text(L("Theo chế độ máy", "Follow phone")).tag(true)
                     }
                     .pickerStyle(.segmented)
-                    LabeledContent("Nhắc lại", value: "\(settings.repeatCount) lần, mỗi \(TodayText.duration(settings.repeatInterval))")
-                    LabeledContent("Hoãn", value: TodayText.duration(settings.snoozeInterval))
-                    LabeledContent("Quá hạn vẫn nhắc thêm", value: TodayText.duration(settings.lateWindow))
+                    LabeledContent(L("Nhắc lại", "Repeats"), value: L("\(settings.repeatCount) lần, mỗi \(TodayText.duration(settings.repeatInterval))", "\(settings.repeatCount) times, every \(TodayText.duration(settings.repeatInterval))"))
+                    LabeledContent(L("Hoãn", "Snooze"), value: TodayText.duration(settings.snoozeInterval))
+                    LabeledContent(L("Quá hạn vẫn nhắc thêm", "Keep reminding after deadline"), value: TodayText.duration(settings.lateWindow))
                     pauseRow(until: settings.pausedUntil(now: now))
                 } header: {
-                    Text("Nhắc nhở")
+                    Text(L("Nhắc nhở", "Reminders"))
                 } footer: {
                     Text(model.vibrateOnly
-                         ? "Nhắc bằng thông báo, im lặng thì chỉ rung. Tới hạn chót vẫn là báo thức có tiếng."
-                         : "Mọi lần nhắc là báo thức, kêu cả khi máy im lặng hay bật Focus.")
+                         ? L("Nhắc bằng thông báo, im lặng thì chỉ rung. Tới hạn chót vẫn là báo thức có tiếng.", "Reminders are notifications, so they only vibrate on silent. From the deadline on it is always a ringing alarm.")
+                         : L("Mọi lần nhắc là báo thức, kêu cả khi máy im lặng hay bật Focus.", "Every reminder is an alarm that rings even on silent or in Focus."))
                 }
 
                 Section {
-                    Toggle("Đếm số viên", isOn: Binding(
+                    Toggle(L("Đếm số viên", "Count pills"), isOn: Binding(
                         get: { settings.pills != nil },
                         set: { on in if on { pillsSheet = true } else { confirmStopCounting = true } }
                     ))
                     if let pills = settings.pills {
-                        LabeledContent("Còn lại", value: "\(pills.remaining)/\(pills.total) viên")
-                        Button("Thêm viên") { pillsSheet = true }
-                        Toggle("Nhắc mua thêm", isOn: Binding(
+                        LabeledContent(L("Còn lại", "Remaining"), value: L("\(pills.remaining)/\(pills.total) viên", "\(pills.remaining)/\(pills.total) pills"))
+                        Button(L("Thêm viên", "Add pills")) { pillsSheet = true }
+                        Toggle(L("Nhắc mua thêm", "Refill reminder"), isOn: Binding(
                             get: { settings.refillReminder.enabled },
                             set: { on in model.update { $0.settings.refillReminder.enabled = on } }
                         ))
                         if settings.refillReminder.enabled {
-                            Stepper("Nhắc khi còn \(settings.refillReminder.daysBefore) viên", value: Binding(
+                            Stepper(L("Nhắc khi còn \(settings.refillReminder.daysBefore) viên", "Remind at \(settings.refillReminder.daysBefore) pills left"), value: Binding(
                                 get: { settings.refillReminder.daysBefore },
                                 set: { days in model.update { $0.settings.refillReminder.daysBefore = days } }
                             ), in: 1...28)
                         }
                     }
                 } header: {
-                    Text("Số viên")
+                    Text(L("Số viên", "Pills"))
                 } footer: {
-                    Text("Tắt đếm thì app chỉ nhắc uống mỗi ngày.")
+                    Text(L("Tắt đếm thì app chỉ nhắc uống mỗi ngày.", "With counting off, the app only reminds you daily."))
                 }
 
                 Section {
                     if let connection = model.connection {
-                        Toggle("Chia sẻ với Tùng", isOn: $model.shareEnabled)
+                        Toggle(L("Chia sẻ với Tùng", "Share with Tùng"), isOn: $model.shareEnabled)
                         LabeledContent("Server", value: connection.endpoint.host() ?? "")
-                        LabeledContent("Đồng bộ gần nhất", value: model.lastSync.map { "\(TodayText.dayTitle($0)), \(TimeFormatting.vietnamTime($0))" } ?? "chưa")
+                        LabeledContent(L("Đồng bộ gần nhất", "Last sync"), value: model.lastSync.map { "\(TodayText.dayTitle($0)), \(TimeFormatting.vn($0))" } ?? L("chưa", "never"))
                         if let issue = model.syncIssue {
                             Text(issue).foregroundStyle(DoseStatus.missed.foreground)
                         }
-                        Button("Gỡ kết nối", role: .destructive) { confirmDisconnect = true }
+                        Button(L("Gỡ kết nối", "Disconnect"), role: .destructive) { confirmDisconnect = true }
                     } else {
-                        TextField("Dán mã kết nối", text: $code)
+                        TextField(L("Dán mã kết nối", "Paste connection code"), text: $code)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                        Button("Kết nối") {
+                        Button(L("Kết nối", "Connect")) {
                             Task { badCode = !(await model.connect(code: code)) }
                         }
                         .disabled(code.isEmpty)
                         if badCode {
-                            Text("Mã không đúng dạng. Mã bắt đầu bằng https:// và có dấu #.")
+                            Text(L("Mã không đúng dạng. Mã bắt đầu bằng https:// và có dấu #.", "Invalid code. It starts with https:// and contains #."))
                                 .foregroundStyle(DoseStatus.missed.foreground)
                         }
                     }
                 } header: {
-                    Text("Theo dõi cùng")
+                    Text(L("Theo dõi cùng", "Shared tracking"))
                 } footer: {
-                    Text("Khi có mạng, app gửi trạng thái mới nhất để Tùng xem qua Telegram. Không có mạng thì vẫn nhắc bình thường. Mã kết nối lấy bằng lệnh /link của bot.")
+                    Text(L("Khi có mạng, app gửi trạng thái mới nhất để Tùng xem qua Telegram. Không có mạng thì vẫn nhắc bình thường. Mã kết nối lấy bằng lệnh /link của bot.", "When online, the app sends the latest status so Tùng can follow it on Telegram. Offline, reminders work as usual. Get the connection code with the bot's /link command."))
                 }
 
-                Section("Ứng dụng") {
-                    LabeledContent("Phiên bản", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                Section(L("Ứng dụng", "App")) {
+                    Picker(L("Ngôn ngữ", "Language"), selection: $model.language) {
+                        Text("Tiếng Việt").tag(Language.vi)
+                        Text("English").tag(Language.en)
+                    }
+                    LabeledContent(L("Phiên bản", "Version"), value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                 }
             }
             .scrollContentBackground(.hidden)
             .background(Palette.background)
             .tint(Palette.primary)
-            .navigationTitle("Cài đặt")
+            .navigationTitle(L("Cài đặt", "Settings"))
             .sheet(isPresented: $pillsSheet) { PillsSheet() }
-            .confirmationDialog("Gỡ kết nối với Tùng?", isPresented: $confirmDisconnect, titleVisibility: .visible) {
-                Button("Gỡ kết nối", role: .destructive) { model.disconnect() }
+            .confirmationDialog(L("Gỡ kết nối với Tùng?", "Disconnect from Tùng?"), isPresented: $confirmDisconnect, titleVisibility: .visible) {
+                Button(L("Gỡ kết nối", "Disconnect"), role: .destructive) { model.disconnect() }
             } message: {
-                Text("App ngừng gửi dữ liệu. Muốn nối lại thì dán lại mã kết nối.")
+                Text(L("App ngừng gửi dữ liệu. Muốn nối lại thì dán lại mã kết nối.", "The app stops sending data. Paste the connection code again to reconnect."))
             }
-            .confirmationDialog("Tắt đếm số viên?", isPresented: $confirmStopCounting, titleVisibility: .visible) {
-                Button("Tắt đếm", role: .destructive) { model.update { $0.settings.pills = nil } }
+            .confirmationDialog(L("Tắt đếm số viên?", "Stop counting pills?"), isPresented: $confirmStopCounting, titleVisibility: .visible) {
+                Button(L("Tắt đếm", "Stop counting"), role: .destructive) { model.update { $0.settings.pills = nil } }
             } message: {
-                Text("Số viên đang đếm sẽ mất. Lịch sử uống vẫn giữ nguyên.")
+                Text(L("Số viên đang đếm sẽ mất. Lịch sử uống vẫn giữ nguyên.", "The current pill count is lost. Your history stays."))
             }
         }
     }
@@ -141,12 +145,12 @@ struct SettingsView: View {
     @ViewBuilder
     private func pauseRow(until: Date?) -> some View {
         if let until {
-            LabeledContent("Đang tạm dừng tới", value: "\(TodayText.dayTitle(until)), \(TimeFormatting.vietnamTime(until))")
-            Button("Nhắc lại ngay") { model.update { $0.resume(now: .now) } }
+            LabeledContent(L("Đang tạm dừng tới", "Paused until"), value: "\(TodayText.dayTitle(until)), \(TimeFormatting.vn(until))")
+            Button(L("Nhắc lại ngay", "Resume now")) { model.update { $0.resume(now: .now) } }
         } else {
-            Menu("Tạm dừng nhắc") {
+            Menu(L("Tạm dừng nhắc", "Pause reminders")) {
                 ForEach([1, 3, 7], id: \.self) { days in
-                    Button("\(days) ngày") { model.update { $0.pause(days: days, now: .now) } }
+                    Button(L("\(days) ngày", days == 1 ? "1 day" : "\(days) days")) { model.update { $0.pause(days: days, now: .now) } }
                 }
             }
         }
@@ -163,16 +167,16 @@ struct PillsSheet: View {
         let counting = model.planner.settings.pills != nil
         NavigationStack {
             Form {
-                Stepper("\(count) viên", value: $count, in: 1...200)
-                Text(counting ? "Cộng vào số viên còn lại." : "Mỗi lần bấm Đã uống trừ một viên.")
+                Stepper(L("\(count) viên", "\(count) pills"), value: $count, in: 1...200)
+                Text(counting ? L("Cộng vào số viên còn lại.", "Added to the remaining pills.") : L("Mỗi lần bấm Đã uống trừ một viên.", "Each tap on Taken subtracts one pill."))
                     .foregroundStyle(Palette.textSecondary)
             }
-            .navigationTitle(counting ? "Thêm viên" : "Bắt đầu đếm")
+            .navigationTitle(counting ? L("Thêm viên", "Add pills") : L("Bắt đầu đếm", "Start counting"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Huỷ") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L("Huỷ", "Cancel")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Lưu") {
+                    Button(L("Lưu", "Save")) {
                         model.update { $0.addPills(count, now: .now) }
                         dismiss()
                     }

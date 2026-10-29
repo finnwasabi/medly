@@ -32,6 +32,11 @@ public enum VietnamClock {
     }
 }
 
+/// Ngôn ngữ chữ hiển thị. App chọn trong Cài đặt, không theo ngôn ngữ máy.
+public enum Language: String, Codable, CaseIterable, Sendable {
+    case vi, en
+}
+
 /// Định dạng giờ hiển thị. Không phụ thuộc locale hay múi giờ của máy.
 public enum TimeFormatting {
     /// "HH:mm" theo múi giờ truyền vào.
@@ -42,15 +47,15 @@ public enum TimeFormatting {
         return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
     }
 
-    /// Ví dụ "21:00 giờ VN".
-    public static func vietnamTime(_ date: Date) -> String {
-        clockTime(date, in: VietnamClock.timeZone) + " giờ VN"
+    /// Ví dụ "21:00 giờ VN", tiếng Anh "21:00 VN time".
+    public static func vietnamTime(_ date: Date, language: Language = .vi) -> String {
+        clockTime(date, in: VietnamClock.timeZone) + (language == .en ? " VN time" : " giờ VN")
     }
 
     /// Giờ VN kèm giờ nơi máy đang ở, ví dụ "21:00 giờ VN, 23:00 giờ máy".
     /// App truyền `TimeZone.current` vào đây, package không tự đọc.
-    public static func dualTime(_ date: Date, deviceTimeZone: TimeZone) -> String {
-        vietnamTime(date) + ", " + clockTime(date, in: deviceTimeZone) + " giờ máy"
+    public static func dualTime(_ date: Date, deviceTimeZone: TimeZone, language: Language = .vi) -> String {
+        vietnamTime(date, language: language) + ", " + clockTime(date, in: deviceTimeZone) + (language == .en ? " device time" : " giờ máy")
     }
 }
 
