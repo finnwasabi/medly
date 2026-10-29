@@ -24,7 +24,7 @@ struct HistoryView: View {
                 .padding(.bottom, 24)
             }
             .background(Palette.background)
-            .navigationTitle("Lịch sử")
+            .navigationTitle(L("Lịch sử", "History"))
             .sheet(item: $editing) { record in
                 EditTakenTimeSheet(record: record)
             }
@@ -33,13 +33,13 @@ struct HistoryView: View {
 
     private func summaryCard(planner: Planner, now: Date) -> some View {
         HStack(spacing: 0) {
-            stat(value: planner.daysTaken(now: now), label: "ngày đã uống", color: DoseStatus.taken.foreground)
+            stat(value: planner.daysTaken(now: now), label: L("ngày đã uống", "days taken"), color: DoseStatus.taken.foreground)
             Divider().frame(height: 40)
-            stat(value: planner.lateCount(now: now), label: "lần trễ", color: DoseStatus.late.foreground)
+            stat(value: planner.lateCount(now: now), label: L("lần trễ", "late"), color: DoseStatus.late.foreground)
             Divider().frame(height: 40)
-            stat(value: planner.madeUpCount(now: now), label: "uống bù", color: DoseStatus.madeUp.foreground)
+            stat(value: planner.madeUpCount(now: now), label: L("uống bù", "made up"), color: DoseStatus.madeUp.foreground)
             Divider().frame(height: 40)
-            stat(value: planner.missedCount(now: now) - planner.madeUpCount(now: now), label: "viên hụt", color: DoseStatus.missed.foreground)
+            stat(value: planner.missedCount(now: now) - planner.madeUpCount(now: now), label: L("viên hụt", "missed"), color: DoseStatus.missed.foreground)
         }
         .card()
     }
@@ -65,26 +65,26 @@ struct HistoryView: View {
         let leading = (calendar.component(.weekday, from: month) + 5) % 7
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Tháng \(parts.month!), \(String(parts.year!))")
+                Text(TodayText.monthTitle(month: parts.month!, year: parts.year!))
                     .font(.headline)
                     .foregroundStyle(Palette.text)
                 Spacer()
                 Button { monthOffset -= 1 } label: { Image(systemName: "chevron.left") }
-                    .accessibilityLabel("Tháng trước")
+                    .accessibilityLabel(L("Tháng trước", "Previous month"))
                 Button { monthOffset += 1 } label: { Image(systemName: "chevron.right") }
-                    .accessibilityLabel("Tháng sau")
+                    .accessibilityLabel(L("Tháng sau", "Next month"))
                     .disabled(monthOffset >= 0)
                     .padding(.leading, 16)
             }
             .foregroundStyle(Palette.primary)
             LazyVGrid(columns: columns, spacing: 6) {
-                ForEach(["T2", "T3", "T4", "T5", "T6", "T7", "CN"], id: \.self) { day in
-                    Text(day)
+                // Ba loại ô chung một lưới nên id phải khác dải: tiêu đề thứ -1 tới -7, ô trống từ -100, ngày từ 1.
+                ForEach([-2, -3, -4, -5, -6, -7, -1], id: \.self) { weekday in
+                    Text(TodayText.shortWeekday(-weekday))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Palette.textSecondary)
                 }
-                // Id âm để không trùng id các ô ngày trong cùng lưới.
-                ForEach(-leading..<0, id: \.self) { _ in Color.clear.frame(height: 40) }
+                ForEach((0..<leading).map { -100 - $0 }, id: \.self) { _ in Color.clear.frame(height: 40) }
                 ForEach(1...dayCount, id: \.self) { day in
                     let date = calendar.date(byAdding: .day, value: day - 1, to: month)!
                     dayCell(day: day, status: days[date].map(DoseStatus.init), isToday: date == today)
@@ -107,7 +107,7 @@ struct HistoryView: View {
                         .strokeBorder(Palette.primary, lineWidth: 2)
                 }
             }
-            .accessibilityLabel("Ngày \(day), \(status?.label ?? "chưa có")")
+            .accessibilityLabel(L("Ngày \(day), \(status?.label ?? "chưa có")", "Day \(day), \(status?.label ?? "no record")"))
     }
 
     private var legend: some View {
@@ -123,19 +123,19 @@ struct HistoryView: View {
     }
 
     private func entryDetail(_ record: DoseRecord) -> String {
-        guard let takenAt = record.takenAt else { return "giờ uống \(TimeFormatting.vietnamTime(record.scheduledAt))" }
-        if record.status == .madeUp { return "uống bù lúc \(TimeFormatting.vietnamTime(takenAt)), \(TodayText.dayTitle(takenAt))" }
-        return TimeFormatting.vietnamTime(takenAt)
+        guard let takenAt = record.takenAt else { return L("giờ uống \(TimeFormatting.vn(record.scheduledAt))", "pill time \(TimeFormatting.vn(record.scheduledAt))") }
+        if record.status == .madeUp { return L("uống bù lúc \(TimeFormatting.vn(takenAt)), \(TodayText.dayTitle(takenAt))", "made up at \(TimeFormatting.vn(takenAt)), \(TodayText.dayTitle(takenAt))") }
+        return TimeFormatting.vn(takenAt)
     }
 
     private func entriesCard(_ records: [DoseRecord]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Gần đây")
+            Text(L("Gần đây", "Recent"))
                 .font(.headline)
                 .foregroundStyle(Palette.text)
                 .padding(.bottom, 8)
             if records.isEmpty {
-                Text("Chưa có lần uống nào.")
+                Text(L("Chưa có lần uống nào.", "No doses yet."))
                     .foregroundStyle(Palette.textSecondary)
                     .padding(.vertical, 10)
             }
@@ -163,7 +163,7 @@ struct HistoryView: View {
                 .disabled(!editable)
                 if record.id != records.last?.id { Divider() }
             }
-            Text("Chạm vào một lần uống để sửa giờ.")
+            Text(L("Chạm vào một lần uống để sửa giờ.", "Tap a dose to edit its time."))
                 .font(.footnote)
                 .foregroundStyle(Palette.textSecondary)
                 .padding(.top, 8)
@@ -183,26 +183,26 @@ struct EditTakenTimeSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                DatePicker("Giờ uống (giờ VN)", selection: $date, in: ...Date.now)
+                DatePicker(L("Giờ uống (giờ VN)", "Pill time (VN time)"), selection: $date, in: ...Date.now)
                     .environment(\.timeZone, VietnamClock.timeZone)
                 if record.status == .madeUp {
-                    Button("Xoá lần uống bù", role: .destructive) { confirmRemove = true }
+                    Button(L("Xoá lần uống bù", "Delete make-up"), role: .destructive) { confirmRemove = true }
                 }
             }
-            .confirmationDialog("Xoá lần uống bù này?", isPresented: $confirmRemove, titleVisibility: .visible) {
-                Button("Xoá", role: .destructive) {
+            .confirmationDialog(L("Xoá lần uống bù này?", "Delete this make-up?"), isPresented: $confirmRemove, titleVisibility: .visible) {
+                Button(L("Xoá", "Delete"), role: .destructive) {
                     model.update { $0.removeRecord(id: record.id) }
                     dismiss()
                 }
             } message: {
-                Text("Lần đó sẽ hiện lại là hụt. Nếu đang đếm viên thì được trả lại một viên.")
+                Text(L("Lần đó sẽ hiện lại là hụt. Nếu đang đếm viên thì được trả lại một viên.", "That dose shows as missed again. If you count pills, one pill is given back."))
             }
-            .navigationTitle("Sửa giờ uống")
+            .navigationTitle(L("Sửa giờ uống", "Edit time"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Huỷ") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L("Huỷ", "Cancel")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Lưu") {
+                    Button(L("Lưu", "Save")) {
                         model.update { $0.editTakenTime(id: record.id, to: date) }
                         dismiss()
                     }

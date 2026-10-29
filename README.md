@@ -4,7 +4,8 @@ App iOS nhắc uống thuốc hằng ngày, luôn tính theo giờ Việt Nam d�
 
 - Báo thức kêu cả khi máy gạt im lặng hoặc bật Focus (AlarmKit), hoặc chế độ chỉ rung.
 - Hoãn, nhắc lại tới khi xác nhận đã uống, cảnh báo trước khi hai lần uống cách nhau quá 24 giờ.
-- Đếm số viên còn lại và nhắc mua thêm (tuỳ chọn).
+- Đếm số viên còn lại và nhắc mua thêm (tuỳ chọn). Đánh dấu uống bù cho viên hụt.
+- Tiếng Việt và tiếng Anh, chọn ở lần mở đầu và đổi trong Cài đặt.
 - Chạy hoàn toàn không cần mạng. Có mạng thì đồng bộ trạng thái lên một dịch vụ tự host để người thân theo dõi qua Telegram.
 
 ## Yêu cầu

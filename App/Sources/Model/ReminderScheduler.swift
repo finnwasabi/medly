@@ -14,6 +14,8 @@ nonisolated struct ReminderScheduler: Sendable {
     /// Trả số lần báo không hẹn được.
     func apply(_ alerts: [PlannedAlert], cancelActive: Bool, snooze: TimeInterval) async -> Int {
         var failures = 0
+        // Chữ trên nút noti theo ngôn ngữ đang chọn.
+        Self.registerCategory()
         let manager = AlarmManager.shared
         // ponytail: huỷ hết rồi hẹn lại mỗi lần, khoảng vài trăm báo thức; đo trên máy thật, chậm thì chuyển sang so khác biệt.
         for alarm in (try? manager.alarms) ?? [] where cancelActive || alarm.state == .scheduled {
@@ -52,23 +54,24 @@ nonisolated struct ReminderScheduler: Sendable {
         let presentation = AlarmPresentation(
             alert: AlarmPresentation.Alert(
                 title: LocalizedStringResource(stringLiteral: alert.title),
-                stopButton: AlarmButton(text: "Đã uống", textColor: .white, systemImageName: "checkmark"),
-                secondaryButton: AlarmButton(text: "Hoãn", textColor: .white, systemImageName: "zzz"),
+                stopButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L("Đã uống", "Taken")), textColor: .white, systemImageName: "checkmark"),
+                secondaryButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L("Hoãn", "Snooze")), textColor: .white, systemImageName: "zzz"),
                 secondaryButtonBehavior: .countdown
             ),
-            countdown: AlarmPresentation.Countdown(title: "Đang hoãn")
+            countdown: AlarmPresentation.Countdown(title: LocalizedStringResource(stringLiteral: L("Đang hoãn", "Snoozed")))
         )
         return AlarmManager.AlarmConfiguration(
             countdownDuration: Alarm.CountdownDuration(preAlert: nil, postAlert: snooze),
             schedule: .fixed(alert.date),
-            attributes: AlarmAttributes<DoseAlarmMetadata>(presentation: presentation, tintColor: Palette.primary),
+            attributes: AlarmAttributes<DoseAlarmMetadata>(
+                presentation: presentation, metadata: DoseAlarmMetadata(language: AppLanguage.current.rawValue), tintColor: Palette.primary),
             stopIntent: MarkTakenIntent()
         )
     }
 
     /// Nút "Đã uống" ngay trên noti, không cần mở app.
     static func registerCategory() {
-        let taken = UNNotificationAction(identifier: takenAction, title: "Đã uống", options: [])
+        let taken = UNNotificationAction(identifier: takenAction, title: L("Đã uống", "Taken"), options: [])
         UNUserNotificationCenter.current().setNotificationCategories([
             UNNotificationCategory(identifier: doseCategory, actions: [taken], intentIdentifiers: []),
         ])

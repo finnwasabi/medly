@@ -7,6 +7,7 @@ struct NersDailyApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var model = AppModel.shared
     @State private var needsOnboarding = AlarmManager.shared.authorizationState == .notDetermined
+    @State private var languageChosen = AppLanguage.isChosen
 
     private static let notificationDelegate = NotificationDelegate()
 
@@ -18,7 +19,10 @@ struct NersDailyApp: App {
     var body: some Scene {
         WindowGroup {
             launchScreen
+                // Đổi ngôn ngữ thì dựng lại cả cây để mọi chữ L(...) đọc lại.
+                .id(model.language)
                 .environment(model)
+                .environment(\.locale, AppLanguage.locale)
                 .fontDesign(.rounded)
         }
         .onChange(of: scenePhase) { _, phase in
@@ -35,7 +39,12 @@ struct NersDailyApp: App {
         case "history": RootView(selectedTab: 1)
         case "settings": RootView(selectedTab: 2)
         default:
-            if needsOnboarding {
+            if !languageChosen {
+                LanguageView { language in
+                    model.language = language
+                    languageChosen = true
+                }
+            } else if needsOnboarding {
                 OnboardingView { needsOnboarding = false }
             } else {
                 RootView()

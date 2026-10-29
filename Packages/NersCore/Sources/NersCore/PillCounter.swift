@@ -41,7 +41,8 @@ public struct PillCounter: Codable, Equatable, Sendable {
     }
 
     /// Dòng kèm theo mỗi lần báo uống khi tới ngưỡng mua thêm.
-    public func refillMessage(_ reminder: RefillReminder) -> String? {
-        needsRefill(reminder) ? "còn \(remaining) viên, nhớ mua thêm" : nil
+    public func refillMessage(_ reminder: RefillReminder, language: Language = .vi) -> String? {
+        guard needsRefill(reminder) else { return nil }
+        return language == .en ? "\(remaining) \(remaining == 1 ? "pill" : "pills") left, time to buy more" : "còn \(remaining) viên, nhớ mua thêm"
     }
 }

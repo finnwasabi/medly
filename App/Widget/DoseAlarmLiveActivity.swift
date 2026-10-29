@@ -18,7 +18,7 @@ struct DoseAlarmLiveActivity: Widget {
                     .font(.title)
                     .foregroundStyle(context.attributes.tintColor)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title(context.state))
+                    Text(title(context.state, context.attributes.metadata))
                         .font(.headline)
                     Text("Ner's Daily")
                         .font(.caption)
@@ -34,7 +34,7 @@ struct DoseAlarmLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label(title(context.state), systemImage: "pills.fill")
+                    Label(title(context.state, context.attributes.metadata), systemImage: "pills.fill")
                         .font(.headline)
                         .foregroundStyle(context.attributes.tintColor)
                 }
@@ -56,11 +56,12 @@ struct DoseAlarmLiveActivity: Widget {
         }
     }
 
-    private func title(_ state: AlarmPresentationState) -> String {
+    private func title(_ state: AlarmPresentationState, _ metadata: DoseAlarmMetadata?) -> String {
+        let en = metadata?.language == "en"
         switch state.mode {
-        case .countdown: "Đang hoãn uống thuốc"
-        case .paused: "Đã dừng hoãn"
-        default: "Tới giờ uống thuốc"
+        case .countdown: return en ? "Pill snoozed" : "Đang hoãn uống thuốc"
+        case .paused: return en ? "Snooze paused" : "Đã dừng hoãn"
+        default: return en ? "Time to take your pill" : "Tới giờ uống thuốc"
         }
     }
 

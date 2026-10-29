@@ -39,3 +39,26 @@ import Testing
         #expect(alerts.first?.body == "Hạn chót 23:00 giờ VN.")
     }
 }
+
+@Suite struct EnglishTextTests {
+    @Test func everyAlertKindHasBothLanguages() {
+        let kinds: [ReminderKind] = [.main, .repeat, .hourly, .final, .deadline, .overdue]
+        for kind in kinds {
+            let vi = AlertPlanner.title(for: kind, language: .vi)
+            let en = AlertPlanner.title(for: kind, language: .en)
+            #expect(!vi.isEmpty && !en.isEmpty && vi != en)
+        }
+    }
+
+    @Test func englishAlertsAndMessages() {
+        var planner = Planner()
+        planner.markTaken(at: vn(2026, 10, 1, 23))
+        let alerts = AlertPlanner.alerts(
+            for: planner.events(now: vn(2026, 10, 1, 23, 1)), vibrateOnly: false,
+            refillMessage: PillCounter(count: 1, at: vn(2026, 10, 1, 8)).refillMessage(RefillReminder(), language: .en),
+            missedMessage: AlertPlanner.missedMessage(count: 2, language: .en), language: .en)
+        #expect(alerts.first?.title == "Time to take your pill. 2 missed pills not made up. 1 pill left, time to buy more")
+        #expect(alerts.first?.body == "Deadline 23:00 VN time.")
+        #expect(TimeFormatting.vietnamTime(vn(2026, 10, 1, 21), language: .en) == "21:00 VN time")
+    }
+}
