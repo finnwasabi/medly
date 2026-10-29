@@ -20,7 +20,7 @@ import Testing
             pills.consume()
             flags.append(pills.needsRefill(reminder))
         }
-        // Còn 9, 8 thì chưa nhắc; còn 7 trở xuống thì nhắc.
+        // At 9 or 8 left no reminder; at 7 or fewer it reminds.
         #expect(flags == [false, false, true, true, true, true, true, true, true, true])
         pills.add(3, at: vn(2026, 10, 11, 8))
         #expect(pills.refillMessage(reminder) == "còn 3 viên, nhớ mua thêm")
@@ -67,8 +67,8 @@ import Testing
         try #require(JSONSerialization.jsonObject(with: data) as? NSDictionary)
     }
 
-    /// Dựng lại đúng tình huống trong JSON mẫu của spec: uống 21:03 giờ VN mỗi ngày từ 15/10,
-    /// bỏ ngày 20/10, nhập 28 viên.
+    /// Rebuilds the exact situation of the spec's sample JSON: taken at 21:03 Vietnam time daily from 15/10,
+    /// skipping 20/10, with 28 pills entered.
     @Test func matchesSpecExample() throws {
         var planner = Planner(settings: ReminderSettings(pills: PillCounter(count: 28, at: vn(2026, 10, 15, 8))))
         for day in 15...27 where day != 20 {
@@ -117,7 +117,7 @@ import Testing
         var planner = Planner()
         planner.markTaken(at: vn(2026, 10, 1, 21))
         planner.markTaken(at: vn(2026, 10, 2, 23))
-        // Ngày 3 bỏ, ngày 4 uống lại.
+        // Day 3 skipped, day 4 taken again.
         planner.markTaken(at: vn(2026, 10, 4, 21))
         let days = planner.dayStatuses(now: vn(2026, 10, 5, 8))
         let start = { VietnamClock.calendar.startOfDay(for: vn(2026, 10, $0, 12)) }

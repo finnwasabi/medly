@@ -1,5 +1,5 @@
-# Gắn tag vX.Y.Z thì build .ipa không ký, đính kèm cùng source.json vào GitHub Release.
-# SideStore đọc source cố định: https://github.com/finnwasabi/ners-daily/releases/latest/download/source.json
+# Tagging vX.Y.Z builds an unsigned .ipa and attaches it, with source.json, to a GitHub Release.
+# SideStore reads the fixed source: https://github.com/finnwasabi/ners-daily/releases/latest/download/source.json
 name: Release
 
 on:

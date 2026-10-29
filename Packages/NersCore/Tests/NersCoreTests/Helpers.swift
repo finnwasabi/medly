@@ -1,7 +1,7 @@
 import Foundation
 @testable import NersCore
 
-/// Dựng thời điểm theo giờ VN cho dễ đọc trong test.
+/// Builds a moment in Vietnam time, for readable tests.
 func vn(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
     VietnamClock.calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
 }
@@ -11,7 +11,7 @@ func utc(_ text: String) -> Date { UTCTimestamp.date(from: text)! }
 let hour: TimeInterval = 3600
 let minute: TimeInterval = 60
 
-/// Sinh số ngẫu nhiên có seed cố định (SplitMix64) để test lặp lại được.
+/// Seeded random numbers (SplitMix64) so the tests are repeatable.
 struct SeededGenerator: RandomNumberGenerator {
     var state: UInt64
     init(seed: UInt64) { state = seed }

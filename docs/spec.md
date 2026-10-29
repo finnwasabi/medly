@@ -1,67 +1,83 @@
-# Đặc tả Ner's Daily
+# Ner's Daily specification
 
-Tài liệu này là nguồn chuẩn cho logic nhắc uống thuốc và hợp đồng dữ liệu giữa app và dịch vụ đồng bộ.
+The reference for the reminder logic and the data contract between the app and the sync service.
+`Packages/NersCore` implements everything below and its tests pin it down.
 
-## Giờ Việt Nam cố định
+## Fixed Vietnam time
 
-- Mọi mốc giờ tính theo `TimeZone(identifier: "Asia/Ho_Chi_Minh")` (UTC+7, không có giờ mùa hè),
-  bất kể múi giờ của máy. Không bao giờ dùng `TimeZone.current` để tính lịch.
-- Mọi mốc giờ lưu và truyền dạng thời điểm tuyệt đối (`Date`, UTC ISO 8601 khi ra JSON).
-- Hiển thị luôn kèm cả hai giờ: giờ VN và giờ nơi máy đang ở.
-- Báo thức dùng `Alarm.Schedule.fixed(Date)` (AlarmKit), noti dùng `UNTimeIntervalNotificationTrigger`
-  tính từ thời điểm tuyệt đối. Không dùng `Alarm.Schedule.relative` vì nó chạy theo múi giờ máy.
-- App hẹn sẵn H ngày tới (mặc định 14) và nạp thêm khi mở app, khi bấm "Đã uống", khi đổi múi giờ,
-  khi Background App Refresh chạy.
+- Every time is computed in `TimeZone(identifier: "Asia/Ho_Chi_Minh")` (UTC+7, no daylight saving), whatever the
+  device time zone is. `TimeZone.current` is never used for scheduling.
+- Times are stored and sent as absolute moments (`Date`, UTC ISO 8601 in JSON).
+- Screens show Vietnam time, plus the local time when the device is in a different time zone.
+- Alarms use `Alarm.Schedule.fixed(Date)` (AlarmKit) and notifications use `UNTimeIntervalNotificationTrigger` from an
+  absolute moment. `Alarm.Schedule.relative` is never used because it follows the device time zone.
+- The app schedules the next H days (14) ahead and refills on every launch, every "Taken", undo, settings change, and
+  whenever the network comes back.
 
-## Lịch và khoảng tối đa
+## Schedule and maximum gap
 
-- Người dùng đặt **giờ chính** theo giờ VN (ví dụ 21:00).
-- **Khoảng tối đa** giữa hai lần uống liên tiếp: mặc định 24 giờ, chỉnh được.
-- Hạn chót lần kế = lần uống trước + khoảng tối đa.
-- Mốc nhắc lần kế = min(giờ chính ngày kế theo giờ VN, hạn chót).
-  Uống sớm thì mốc hôm sau bị kéo sớm theo. Có thao tác "về lại giờ gốc": app báo rõ lần đó sẽ vượt khoảng tối đa.
-- Chuỗi nhắc cho mỗi lần uống, tất cả huỷ khi bấm "Đã uống":
-  1. Mốc nhắc chính.
-  2. Nhắc lại 3 lần, mỗi lần cách 5 phút (chỉnh được).
-  3. Sau đó nhắc mỗi 1 giờ.
-  4. Trong 2 giờ cuối trước hạn chót: nhắc mỗi 15 phút.
-  5. Tại hạn chót: báo thức có tiếng bất kể chế độ, kèm câu trỏ về tờ hướng dẫn thuốc và bác sĩ, dược sĩ.
-  6. Quá hạn chót mà chưa uống: vẫn báo có tiếng, nhắc lại 3 lần mỗi 5 phút, rồi mỗi 15 phút tới hết 3 giờ
-     đầu, rồi mỗi giờ tới hết cửa sổ trễ (mặc định 12 giờ sau hạn chót, chỉnh được).
-  Uống đúng giờ chính mỗi ngày thì hạn chót trùng giờ chính hôm sau, nên phần nhắc sau hạn chót mới là
-  phần "nhắc tới khi uống".
-- Hoãn: kêu lại sau 10 phút (chỉnh được). Hoãn không dời hạn chót.
-- "Đã uống" có hoàn tác trong 10 phút. Thời điểm uống sửa được trong lịch sử.
-- "Tạm dừng nhắc N ngày": không nhắc, không tính hụt trong thời gian dừng. Hết dừng thì lần kế tính từ giờ chính.
-- Mọi mốc phải đúng khi: đổi múi giờ máy giữa chừng, qua nửa đêm, uống sớm, uống trễ, bỏ một ngày.
-- Bất biến: không có khoảng nào giữa hai lần uống liên tiếp vượt khoảng tối đa mà chuỗi nhắc không có
-  ít nhất một mốc báo thức có tiếng tại hoặc trước hạn chót.
+- The user sets a **main time** in Vietnam time (for example 21:00).
+- **Maximum gap** between two consecutive doses: 24 hours by default.
+- Next deadline = previous dose + maximum gap.
+- Next reminder = min(the next main time in Vietnam time, the deadline). Taking a dose early pulls the next day
+  earlier too. "Back to the main time" is available and warns when that dose would exceed the maximum gap.
+- Reminder chain for each dose, all cancelled by "Taken":
+  1. The main reminder.
+  2. 3 repeats, 5 minutes apart.
+  3. Then hourly.
+  4. In the last 2 hours before the deadline: every 15 minutes.
+  5. At the deadline: a ringing alarm regardless of the phone's mode.
+  6. Past the deadline and still not taken: still ringing. 3 repeats 5 minutes apart, then every 15 minutes for the
+     first 3 hours, then hourly until the end of the late window (12 hours after the deadline).
+  Taking the pill at the main time every day puts the deadline on the next main time, so the part after the deadline
+  is what keeps reminding until the pill is taken.
+- Snooze rings again after 10 minutes and never moves the deadline.
+- "Taken" can be undone for 10 minutes. Taken times can be edited in History.
+- "Pause reminders for N days": no reminders and no misses during the pause. Afterwards the next dose starts from the
+  main time.
+- Everything must hold across time zone changes, midnight, early doses, late doses and skipped days.
+- Invariant: two consecutive ringing alarms are never further apart than the maximum gap, and after a dose there is
+  always a ringing alarm at or before its deadline.
 
-## Số viên
+## Statuses
 
-- Ô "Số viên" tuỳ chọn. Bỏ trống: chỉ nhắc, không đếm.
-- Có nhập: mỗi lần "Đã uống" trừ một viên. "Thêm viên" cộng vào số còn lại và tổng.
-- "Nhắc mua thêm": bật tắt, kèm số ngày trước khi hết (mặc định 7). Khi số viên còn lại nhỏ hơn hoặc bằng
-  số ngày đó, mỗi lần báo uống kèm dòng "còn N viên, nhớ mua thêm".
-- **Trễ** = uống sau hạn chót quá 15 phút (dung sai, chỉnh được, để chênh vài giây hay vài phút không thành trễ)
-  nhưng còn trong cửa sổ trễ. Vẫn tính là đã uống, lần kế tính từ lúc uống.
-- **Hụt** = qua hết cửa sổ trễ mà không có xác nhận. Đếm trên máy, không cần mạng.
-- **Uống bù** = đánh dấu đã uống thêm một viên cho một lần hụt (nút "Đã uống bù" trên màn Hôm nay, hiện các lần hụt
-  trong 7 ngày gần nhất). Trừ một viên nếu đang đếm, không đổi lịch nhắc, mỗi lần hụt chỉ bù được một lần, bấm nhầm thì
-  xoá trong Lịch sử (trả lại viên). App không khuyên có nên bù hay không, chỉ trỏ về tờ hướng dẫn thuốc. Còn lần hụt chưa
-  bù thì mỗi lần báo kèm dòng "còn N viên hụt chưa uống bù".
-- Màu: xanh lá đúng giờ, vàng trễ, xanh dương hụt đã uống bù, đỏ hụt, xám tạm dừng. Luôn kèm chữ và biểu tượng.
-- `daysTaken` = số lần đã uống kể từ lần nhập hoặc thêm viên gần nhất (khi không đếm viên: kể từ lúc cài).
+| Status | Meaning | Color |
+|---|---|---|
+| Taken | Confirmed at or before the deadline, with a 15-minute tolerance so seconds or minutes do not count as late. | Green |
+| Late | Taken after the deadline plus tolerance, but within the late window. The next dose counts from it. | Amber |
+| Missed | No confirmation by the end of the late window. | Red |
+| Made up | A missed dose for which an extra pill was taken later. | Blue |
+| Paused | The dose fell inside a pause. | Grey |
 
-## Đồng bộ (không phụ thuộc mạng)
+Statuses always come with a label and an icon, never color alone.
 
-- Mọi nhắc nhở và tính toán chạy trên máy. Có mạng thì gửi ảnh chụp trạng thái mới nhất, mất mạng thì để dành.
-- Dịch vụ không tự suy luận uống hay chưa, chỉ báo đúng dữ liệu mới nhất kèm giờ cập nhật.
+## Make-up doses
 
-### Hợp đồng dữ liệu
+- The Today screen lists missed doses from the last 7 days with a "Mark made up" button.
+- Marking one stores a make-up record linked to that miss. It subtracts a pill when counting and does not change the
+  schedule. Each miss can be made up once.
+- A mistaken make-up is deleted in History and the pill is given back.
+- While misses are not made up, every alert carries the line "N missed pills not made up".
+- The app never advises whether or how to make up a pill. It points to the leaflet, a doctor or a pharmacist.
 
-`POST /v1/snapshot`, header `Authorization: Bearer <token>`, body JSON. Server chỉ giữ bản có `updatedAt` mới nhất,
-bản cũ hơn bị bỏ qua (trả 200 kèm `"stale": true`).
+## Pills
+
+- Counting is optional. Without it the app only reminds.
+- With it, every "Taken" and every make-up subtracts a pill. "Add pills" adds to both the remaining count and the total.
+- "Refill reminder": on or off, with a threshold (7 by default). At or below the threshold, every alert carries
+  "N pills left, time to buy more".
+- `daysTaken` = doses taken since pills were last entered or added (since the start when not counting).
+
+## Sync (offline first)
+
+- All reminders and calculations run on the device. When online, the app sends the latest snapshot; offline, it waits.
+- The service never infers anything. It reports the latest data it received, with its update time.
+
+### Data contract
+
+`POST /v1/snapshot` with `Authorization: Bearer <token>` and a JSON body. The server keeps only the snapshot with the
+newest `updatedAt` and answers older ones with 200 and `"stale": true`. Every response carries the current
+`message` (set by the bot's `/msg`).
 
 ```json
 {
@@ -82,16 +98,18 @@ bản cũ hơn bị bỏ qua (trả 200 kèm `"stale": true`).
 }
 ```
 
-- Mọi mốc giờ là UTC ISO 8601 không có phần lẻ giây. `pillsTotal`, `pillsRemaining` là `null` khi không đếm viên.
-  `lastTakenAt`, `pausedUntil`, `name` có thể `null`. `name` là tên người dùng nhập trong app để bot gọi đúng tên. `missedCount` đếm mọi lần hụt, kể cả lần đã bù; `madeUpCount` là số lần đã bù.
-  Bản app cũ không gửi `lateCount`, `madeUpCount`: server coi như 0.
-- `GET /v1/snapshot` (cùng token) trả bản mới nhất, 404 nếu chưa có.
+- Times are UTC ISO 8601 without fractional seconds. `pillsTotal` and `pillsRemaining` are `null` when not counting.
+  `lastTakenAt`, `pausedUntil` and `name` may be `null`. `name` is the user's name from the app, so the bot can use it.
+- `missedCount` counts every miss, including made-up ones. `madeUpCount` counts the made-up ones.
+- Older app versions do not send `lateCount` or `madeUpCount`; the server treats them as 0.
+- `GET /v1/snapshot` (same token) returns the latest snapshot, or 404 when there is none.
 
-## Bot Telegram
+## Telegram bot
 
-- Bot riêng, chỉ trả lời một chat ID cấu hình sẵn.
-- Nhận snapshot mới (không stale) thì nhắn ngay.
-- Bảng tin 09:00 giờ VN mỗi ngày: số ngày đã uống, số lần trễ, số hụt, số viên còn trên tổng, giờ đồng bộ gần nhất.
-  Snapshot cũ hơn 24 giờ thì ghi rõ "chưa đồng bộ từ ...".
-- Lệnh `/check`: trả trạng thái mới nhất.
-- Mọi giờ hiển thị theo giờ VN. Token bot, token API, chat ID lấy từ biến môi trường, không nằm trong repo.
+- A dedicated bot that answers a single configured chat ID only.
+- Messages on real changes: taken, undo, a new late or missed dose, a make-up, a pause, low pills.
+- A 09:00 Vietnam time report every day: days taken, late, missed, made up, pills left, and the last sync.
+  Snapshots older than 24 hours are flagged as not synced since then.
+- `/check` returns the latest status, `/msg <text>` sets the message shown in the app, `/link` returns the connection code.
+- Bot texts are Vietnamese by default, or English with `BOT_LANGUAGE=en`.
+- All times are shown in Vietnam time. The bot token, API token and chat ID come from environment variables, never the repo.

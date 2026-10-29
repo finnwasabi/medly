@@ -3,9 +3,9 @@ import Testing
 @testable import NersCore
 
 @Suite struct InvariantTests {
-    /// Lịch sử ngẫu nhiên có seed cố định: sau lần uống cuối, luôn có báo thức có tiếng
-    /// trong khoảng (now, lần uống cuối + khoảng tối đa], và hai báo thức có tiếng liên tiếp
-    /// không bao giờ cách nhau quá khoảng tối đa.
+    /// Seeded random histories: after the last take there is always a ringing alarm
+    /// in (now, last take + maximum gap], and two consecutive ringing alarms
+    /// are never further apart than the maximum gap.
     @Test func soundAlarmNeverMissingBeforeDeadline() {
         var rng = SeededGenerator(seed: 20_261_027)
         let maxIntervals: [TimeInterval] = [18 * hour, 24 * hour, 26 * hour, 30 * hour, 36 * hour]
@@ -27,14 +27,14 @@ import Testing
             let last = planner.lastTaken(now: .distantFuture)!.takenAt!
             let deadline = last.addingTimeInterval(settings.maxInterval)
 
-            // Trường hợp 1: còn trong hạn.
+            // Case 1: still before the deadline.
             let now = last.addingTimeInterval(TimeInterval.random(in: 0..<settings.maxInterval, using: &rng).rounded(.down))
             #expect(planner.currentDose(now: now).deadlineAt == deadline)
             let events = planner.events(now: now)
             #expect(events.contains { $0.requiresSound && $0.date > now && $0.date <= deadline })
             checkSoundGaps(events, maxInterval: settings.maxInterval, firstBy: deadline)
 
-            // Trường hợp 2: đã quá hạn, chuỗi sau các lần hụt vẫn giữ bất biến.
+            // Case 2: past the late window; the chain after misses keeps the invariant.
             let later = deadline.addingTimeInterval(settings.lateWindow + TimeInterval.random(in: 1...(72 * hour), using: &rng).rounded())
             #expect(planner.missedCount(now: later) >= 1)
             checkSoundGaps(planner.events(now: later), maxInterval: settings.maxInterval, firstBy: later.addingTimeInterval(settings.maxInterval))

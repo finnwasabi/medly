@@ -1,7 +1,7 @@
 import Foundation
 import NersCore
 
-/// Mã kết nối dạng `https://host/path#token`, bot gửi bằng lệnh /link.
+/// A connection code shaped `https://host/path#token`, sent by the bot's /link command.
 struct SyncConnection: Equatable {
     var endpoint: URL
     var token: String
@@ -17,7 +17,7 @@ struct SyncConnection: Equatable {
     }
 }
 
-/// Gửi snapshot mới nhất lên server. Mất mạng thì thôi, lần sau gửi bản mới nhất (server bỏ bản cũ).
+/// Sends the latest snapshot to the server. Offline is fine: the next sync sends the newest one (the server drops older ones).
 nonisolated struct SyncClient: Sendable {
     struct Reply: Decodable {
         var stale: Bool
@@ -47,7 +47,7 @@ nonisolated struct SyncClient: Sendable {
     }
 }
 
-/// Mã kết nối có chứa token nên cất trong Keychain, chỉ đọc được trên máy này.
+/// The connection code contains a token, so it lives in the Keychain, readable on this device only.
 nonisolated enum ConnectionKeychain {
     private static var query: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "io.github.finnwasabi.nersdaily.sync"]
@@ -66,7 +66,7 @@ nonisolated enum ConnectionKeychain {
         guard let code else { return }
         var item = query
         item[kSecValueData as String] = Data(code.utf8)
-        // Đọc được sau lần mở khoá đầu, để App Intent chạy nền lúc máy khoá vẫn đồng bộ được.
+        // Readable after first unlock, so background App Intents can still sync while the phone is locked.
         item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         SecItemAdd(item as CFDictionary, nil)
     }

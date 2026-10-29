@@ -1,7 +1,7 @@
 import AlarmKit
 
-/// Dùng chung giữa app và widget: kiểu metadata của báo thức phải trùng để widget vẽ được đếm ngược.
+/// Shared by the app and the widget: the alarm metadata type must match for the widget to draw the countdown.
 nonisolated struct DoseAlarmMetadata: AlarmMetadata {
-    /// Widget chạy tiến trình riêng, không đọc được cài đặt của app, nên ngôn ngữ đi kèm từng báo thức.
+    /// The widget runs in its own process and cannot read the app's settings, so each alarm carries the language.
     var language = "vi"
 }

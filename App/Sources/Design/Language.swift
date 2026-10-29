@@ -1,7 +1,7 @@
 import Foundation
 import NersCore
 
-/// Ngôn ngữ đang chọn. Lưu trong UserDefaults nên đọc được từ mọi luồng (lịch nhắc, App Intent).
+/// The selected language. Stored in UserDefaults so any thread can read it (scheduling, App Intents).
 nonisolated enum AppLanguage {
     static let key = "language"
 
@@ -9,20 +9,20 @@ nonisolated enum AppLanguage {
         UserDefaults.standard.string(forKey: key).flatMap(Language.init(rawValue:)) ?? .vi
     }
 
-    /// Đã chọn ngôn ngữ ở lần mở app đầu tiên chưa.
+    /// Whether a language was chosen on first launch.
     static var isChosen: Bool { UserDefaults.standard.string(forKey: key) != nil }
 
-    /// en_GB để giờ hiện 24 giờ giống mọi chỗ khác trong app.
+    /// en_GB keeps pickers on the 24-hour clock used everywhere else in the app.
     static var locale: Locale { Locale(identifier: current == .en ? "en_GB" : "vi_VN") }
 }
 
-/// Một câu hai thứ tiếng viết cạnh nhau, để không câu nào thiếu bản dịch.
+/// One sentence in both languages side by side, so no string can miss a translation.
 nonisolated func L(_ vi: String, _ en: String) -> String {
     AppLanguage.current == .en ? en : vi
 }
 
 extension TimeFormatting {
-    /// Giờ VN theo ngôn ngữ đang chọn: "21:00 giờ VN" hoặc "21:00 VN time".
+    /// Vietnam time in the selected language: "21:00 giờ VN" or "21:00 VN time".
     nonisolated static func vn(_ date: Date) -> String {
         vietnamTime(date, language: AppLanguage.current)
     }

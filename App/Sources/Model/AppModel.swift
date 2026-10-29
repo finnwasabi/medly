@@ -4,22 +4,22 @@ import Network
 import NersCore
 import Observation
 
-/// Trạng thái app: đọc, ghi dữ liệu và nạp lại lịch nhắc sau mỗi thay đổi.
-/// Dùng chung cho màn hình, App Intent của báo thức và nút trên noti.
+/// App state: loads and saves data and reschedules reminders after every change.
+/// Shared by the screens, the alarm App Intent and the notification action.
 @MainActor
 @Observable
 final class AppModel {
     static let shared = AppModel()
 
     private(set) var planner: Planner
-    /// Lỗi đọc, ghi hoặc hẹn nhắc. Hiện lên màn Hôm nay, không nuốt lỗi.
+    /// Load, save or scheduling errors. Shown on the Today screen, never swallowed.
     var issue: String? { scheduleIssue ?? dataIssue }
     private var dataIssue: String?
     private var scheduleIssue: String?
-    /// Lời nhắn mới nhất Tùng gửi qua bot, nhận về khi đồng bộ.
+    /// The latest message the partner sent through the bot, received on sync.
     private(set) var message: String? = UserDefaults.standard.string(forKey: "message")
 
-    /// Ngôn ngữ chữ trong app, noti và báo thức. Đổi là hẹn lại toàn bộ để chữ báo theo ngôn ngữ mới.
+    /// Language of the app, notifications and alarms. Changing it reschedules everything so alert texts follow.
     var language: Language = AppLanguage.current {
         didSet {
             UserDefaults.standard.set(language.rawValue, forKey: AppLanguage.key)
@@ -27,32 +27,41 @@ final class AppModel {
         }
     }
 
-    // MARK: Tên
+    // MARK: Names
 
-    /// Tên người dùng chính, nhập ở lần mở đầu hoặc trong Cài đặt. Gửi kèm snapshot để bot gọi đúng tên.
-    // Không đồng bộ ở đây vì đổi theo từng phím gõ; tên đi theo lần đồng bộ kế tiếp.
+    /// The main user's name, entered on first launch or in Settings. Sent with the snapshot so the bot uses it.
+    // No sync here because this changes on every keystroke; the name goes out with the next sync.
     var userName: String = UserDefaults.standard.string(forKey: "userName") ?? "" {
-        didSet { UserDefaults.standard.set(userName, forKey: "userName") }
+        didSet {
+            if userName.count > Self.nameLimit { userName = String(userName.prefix(Self.nameLimit)) }
+            UserDefaults.standard.set(userName, forKey: "userName")
+        }
     }
 
-    /// Tên người theo dõi cùng, tuỳ chọn.
+    /// Names are capped so greetings and sentences stay readable.
+    static let nameLimit = 40
+
+    /// The partner's name, optional.
     var partnerName: String = UserDefaults.standard.string(forKey: "partnerName") ?? "" {
-        didSet { UserDefaults.standard.set(partnerName, forKey: "partnerName") }
+        didSet {
+            if partnerName.count > Self.nameLimit { partnerName = String(partnerName.prefix(Self.nameLimit)) }
+            UserDefaults.standard.set(partnerName, forKey: "partnerName")
+        }
     }
 
-    /// Lời chào: tên người dùng, chưa có thì "bạn".
+    /// Greeting with the user's name, or a neutral one without it.
     var greeting: String {
         let name = userName.trimmingCharacters(in: .whitespaces)
         return name.isEmpty ? L("Chào bạn", "Hi there") : L("Chào \(name)", "Hi \(name)")
     }
 
-    /// Cách gọi người theo dõi cùng trong câu: tên đã nhập, chưa có thì "người ấy".
+    /// How texts refer to the partner: the entered name, or "your partner" without one.
     var partner: String {
         let name = partnerName.trimmingCharacters(in: .whitespaces)
         return name.isEmpty ? L("người ấy", "your partner") : name
     }
 
-    /// Chỉ rung: các lần nhắc là noti thường theo chế độ máy, riêng hạn chót vẫn là báo thức có tiếng.
+    /// Follow phone: reminders are plain notifications that respect the phone's mode, but the deadline is still a ringing alarm.
     var vibrateOnly: Bool {
         didSet {
             UserDefaults.standard.set(vibrateOnly, forKey: "vibrateOnly")
@@ -60,7 +69,7 @@ final class AppModel {
         }
     }
 
-    // MARK: Theo dõi cùng
+    // MARK: Shared tracking
 
     private(set) var connection: SyncConnection? = ConnectionKeychain.load().flatMap(SyncConnection.init(code:))
     var shareEnabled: Bool = UserDefaults.standard.object(forKey: "shareEnabled") as? Bool ?? true {
@@ -70,7 +79,7 @@ final class AppModel {
         }
     }
     private(set) var lastSync: Date? = UserDefaults.standard.object(forKey: "lastSync") as? Date
-    /// Lỗi đồng bộ gần nhất, chỉ hiện trong Cài đặt: mất mạng là chuyện thường, không làm phiền màn Hôm nay.
+    /// The latest sync error, shown only in Settings: being offline is normal and should not clutter Today.
     private(set) var syncIssue: String?
 
     private let store: PlanStore
@@ -85,13 +94,13 @@ final class AppModel {
         do {
             planner = try store.load()
         } catch {
-            // Cất file hỏng lại để cứu sau, chạy tiếp bằng mặc định để vẫn nhắc.
+            // Keep the corrupt file for recovery and continue with defaults so reminders still run.
             let backup = directory.appending(path: "state-corrupt-\(Int(Date.now.timeIntervalSince1970)).json")
             try? FileManager.default.moveItem(at: store.url, to: backup)
             planner = Planner()
             dataIssue = L("Không đọc được dữ liệu cũ, đã cất vào \(backup.lastPathComponent). App chạy lại từ cài đặt mặc định.", "Could not read old data, saved it as \(backup.lastPathComponent). The app restarted with default settings.")
         }
-        // Có mạng trở lại (xuống máy bay) thì gửi bản mới nhất.
+        // When the network comes back (after landing), send the latest snapshot.
         network.pathUpdateHandler = { path in
             guard path.status == .satisfied else { return }
             Task { @MainActor in await AppModel.shared.sync() }
@@ -99,7 +108,7 @@ final class AppModel {
         network.start(queue: .global(qos: .utility))
     }
 
-    /// Dán mã kết nối từ lệnh /link. Trả `false` nếu mã sai dạng.
+    /// Paste the connection code from the /link command. Returns `false` if the code is malformed.
     func connect(code: String) async -> Bool {
         guard let parsed = SyncConnection(code: code) else { return false }
         ConnectionKeychain.save(code.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -132,7 +141,7 @@ final class AppModel {
     }
 
     func markTaken(now: Date = .now) async {
-        // Bấm ở báo thức rồi bấm lại trong app chỉ tính một lần.
+        // Tapping on the alarm and again in the app counts once.
         if let last = planner.lastTaken(now: now)?.takenAt, now.timeIntervalSince(last) < planner.settings.undoWindow {
             await resync(cancelActive: true)
             return
@@ -148,12 +157,12 @@ final class AppModel {
         await resync()
     }
 
-    /// Bấm "Đã uống bù" cho một lần hụt.
+    /// "Mark made up" for a missed dose.
     func markMadeUp(missedAt scheduledAt: Date) {
         update { $0.markMadeUp(missedAt: scheduledAt, at: .now) }
     }
 
-    /// Mọi thay đổi cài đặt, số viên, tạm dừng, sửa giờ uống đi qua đây: lưu rồi nạp lại lịch nhắc.
+    /// Every change to settings, pills, pauses or taken times goes through here: save, then reschedule.
     func update(_ change: (inout Planner) -> Void) {
         change(&planner)
         persist()
@@ -168,14 +177,14 @@ final class AppModel {
         }
     }
 
-    // MARK: Nạp lại lịch nhắc
+    // MARK: Rescheduling
 
     private var syncing = false
     private var syncAgain = false
     private var cancelActivePending = false
 
-    /// Huỷ và hẹn lại toàn bộ báo thức, noti. Gọi chồng nhau thì gộp, chạy lại một lần nữa sau lượt đang chạy.
-    /// `cancelActive`: huỷ cả báo thức đang kêu hoặc đang hoãn (sau khi đã uống).
+    /// Cancels and reschedules all alarms and notifications. Overlapping calls coalesce into one more pass after the running one.
+    /// `cancelActive`: also cancel alarms that are ringing or snoozed (after a dose is taken).
     func resync(cancelActive: Bool = false) async {
         cancelActivePending = cancelActivePending || cancelActive
         guard !syncing else {
