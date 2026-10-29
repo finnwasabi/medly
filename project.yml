@@ -40,7 +40,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.finnwasabi.nersdaily
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   NersDailyWidget:
     type: app-extension
     platform: iOS

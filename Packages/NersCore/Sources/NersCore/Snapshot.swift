@@ -17,6 +17,8 @@ public struct Snapshot: Codable, Equatable, Sendable {
     public var pillsRemaining: Int?
     public var refillReminder: RefillReminder
     public var pausedUntil: Date?
+    /// Lúc chữ ký của app hết hạn (SideStore ký 7 ngày), để bot nhắc làm mới. App điền, `nil` khi không biết.
+    public var signatureExpiresAt: Date?
 
     public init(
         schemaVersion: Int = Snapshot.currentSchemaVersion,
@@ -30,7 +32,8 @@ public struct Snapshot: Codable, Equatable, Sendable {
         pillsTotal: Int?,
         pillsRemaining: Int?,
         refillReminder: RefillReminder,
-        pausedUntil: Date?
+        pausedUntil: Date?,
+        signatureExpiresAt: Date? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.updatedAt = UTCTimestamp.floorToSecond(updatedAt)
@@ -44,6 +47,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         self.pillsRemaining = pillsRemaining
         self.refillReminder = refillReminder
         self.pausedUntil = pausedUntil.map(UTCTimestamp.floorToSecond)
+        self.signatureExpiresAt = signatureExpiresAt.map(UTCTimestamp.floorToSecond)
     }
 
     /// Dựng snapshot từ cài đặt, lịch sử và thời điểm hiện tại.
@@ -67,7 +71,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion, updatedAt, lastTakenAt, nextDueAt, deadlineAt, daysTaken, missedCount, lateCount
-        case pillsTotal, pillsRemaining, refillReminder, pausedUntil
+        case pillsTotal, pillsRemaining, refillReminder, pausedUntil, signatureExpiresAt
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -85,6 +89,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         try c.encode(pillsRemaining, forKey: .pillsRemaining)
         try c.encode(refillReminder, forKey: .refillReminder)
         try c.encode(pausedUntil.map(UTCTimestamp.string(from:)), forKey: .pausedUntil)
+        try c.encode(signatureExpiresAt.map(UTCTimestamp.string(from:)), forKey: .signatureExpiresAt)
     }
 
     public init(from decoder: Decoder) throws {
@@ -114,7 +119,8 @@ public struct Snapshot: Codable, Equatable, Sendable {
             pillsTotal: try c.decodeIfPresent(Int.self, forKey: .pillsTotal),
             pillsRemaining: try c.decodeIfPresent(Int.self, forKey: .pillsRemaining),
             refillReminder: try c.decode(RefillReminder.self, forKey: .refillReminder),
-            pausedUntil: try date(.pausedUntil)
+            pausedUntil: try date(.pausedUntil),
+            signatureExpiresAt: try date(.signatureExpiresAt)
         )
     }
 

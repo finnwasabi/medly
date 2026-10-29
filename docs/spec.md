@@ -71,12 +71,14 @@ bản cũ hơn bị bỏ qua (trả 200 kèm `"stale": true`).
   "pillsTotal": 28,
   "pillsRemaining": 16,
   "refillReminder": { "enabled": true, "daysBefore": 7 },
-  "pausedUntil": null
+  "pausedUntil": null,
+  "signatureExpiresAt": "2026-11-03T14:03:00Z"
 }
 ```
 
 - Mọi mốc giờ là UTC ISO 8601 không có phần lẻ giây. `pillsTotal`, `pillsRemaining` là `null` khi không đếm viên.
-  `lastTakenAt`, `pausedUntil` có thể `null`.
+  `lastTakenAt`, `pausedUntil`, `signatureExpiresAt` có thể `null`. `signatureExpiresAt` là lúc chữ ký của app hết hạn
+  (SideStore ký 7 ngày), để bot nhắc làm mới. Bản app cũ không gửi `lateCount`, `signatureExpiresAt`: server coi như 0 và `null`.
 - `GET /v1/snapshot` (cùng token) trả bản mới nhất, 404 nếu chưa có.
 
 ## Bot Telegram

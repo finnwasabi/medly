@@ -15,6 +15,11 @@ struct TodayView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         header(now: now)
                         if let issue = model.issue { issueBanner(issue) }
+                        if let expiration = SigningInfo.expiration, expiration.timeIntervalSince(now) < 2 * 24 * 3600 {
+                            issueBanner(expiration > now
+                                ? "App hết hạn chữ ký sau \(TodayText.duration(expiration.timeIntervalSince(now))). Mở SideStore và bấm làm mới để app không ngừng nhắc."
+                                : "App đã hết hạn chữ ký. Mở SideStore và bấm làm mới.")
+                        }
                         if let message = model.message { messageCard(message) }
                         doseCard(now: now)
                         if let pills = model.planner.settings.pills { pillsCard(pills) }

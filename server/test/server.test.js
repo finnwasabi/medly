@@ -106,6 +106,10 @@ test('status text marks data older than 24 hours', () => {
   assert.match(fresh, /Cập nhật lúc 21:03 giờ VN/);
   assert.match(statusText(spec, Date.parse('2026-10-29T01:00:00Z')), /Chưa đồng bộ từ 21:03/);
   assert.equal(statusText(null), 'Chưa nhận được dữ liệu nào từ app.');
+  const expiring = { ...spec, signatureExpiresAt: '2026-10-29T14:00:00Z' };
+  assert.equal(validateSnapshot(expiring), null);
+  assert.match(statusText(expiring, Date.parse('2026-10-28T01:00:00Z')), /hết hạn chữ ký lúc 21:00/);
+  assert.doesNotMatch(statusText({ ...spec, signatureExpiresAt: '2026-11-03T14:00:00Z' }, Date.parse('2026-10-28T01:00:00Z')), /chữ ký/);
 });
 
 test('bot answers only its chat and sends the 09:00 report once a day', async () => {

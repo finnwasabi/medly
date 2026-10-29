@@ -84,7 +84,9 @@ final class AppModel {
     func sync() async {
         guard shareEnabled, let connection else { return }
         do {
-            let reply = try await syncClient.send(planner.snapshot(now: .now), to: connection)
+            var snapshot = planner.snapshot(now: .now)
+            snapshot.signatureExpiresAt = SigningInfo.expiration
+            let reply = try await syncClient.send(snapshot, to: connection)
             message = reply.message
             UserDefaults.standard.set(reply.message, forKey: "message")
             lastSync = .now
