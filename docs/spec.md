@@ -78,7 +78,10 @@ Statuses always come with a label and an icon, never color alone.
 ## Pills
 
 - Counting is optional. Without it the app only reminds.
-- With it, every "Taken" and every make-up subtracts a pill. "Add pills" adds to both the remaining count and the total.
+- With it, every "Taken" and every make-up subtracts a pill. Each medication has a pack size (the first count entered,
+  28 when unknown); "Add a pack" adds one pack. Raising the remaining count adds to both the remaining count and the
+  total; lowering it is a correction and leaves the total alone. The editor applies the difference on Save, so a dose
+  taken from an alarm while the editor is open is not undone.
 - "Refill reminder": on or off, with a threshold (7 by default). At or below the threshold, every alert carries
   "N pills left, time to buy more".
 - `takenCount` = doses taken since pills were last entered or added (since the start when not counting).

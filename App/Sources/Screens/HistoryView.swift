@@ -22,7 +22,7 @@ struct HistoryView: View {
     var body: some View {
         let now = Date.now
         let shown = model.medications.filter { filter == nil || $0.id == filter }
-        NavigationStack {
+        Group {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Text(L("Lịch sử", "History"))
@@ -40,7 +40,6 @@ struct HistoryView: View {
                 .padding(.bottom, 24)
             }
             .background(Palette.background)
-            .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $editing) { entry in
                 EditTakenTimeSheet(medicationID: entry.medication.id, record: entry.record)
             }

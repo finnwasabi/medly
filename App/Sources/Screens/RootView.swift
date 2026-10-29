@@ -21,6 +21,8 @@ struct RootView: View {
             default: TodayView()
             }
         }
+        // The screens have no NavigationStack of their own: one would swallow this inset, and the end of every
+        // list would stay hidden under the bar (0.2.0 on a 6.1 inch phone).
         .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
         .onAppear { if let selectedTab { tab = selectedTab } }
     }
