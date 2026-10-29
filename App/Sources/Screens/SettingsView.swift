@@ -6,6 +6,8 @@ struct SettingsView: View {
     @State private var pillsSheet = false
     @State private var confirmStopCounting = false
     @State private var confirmDisconnect = false
+    /// A main time change that would push the next dose past the maximum gap, waiting for confirmation.
+    @State private var pendingTime: (hour: Int, minute: Int, preview: ResetPreview)?
     @State private var code = ""
     @State private var badCode = false
 
@@ -124,6 +126,21 @@ struct SettingsView: View {
             .tint(Palette.primary)
             .navigationTitle(L("Cài đặt", "Settings"))
             .sheet(isPresented: $pillsSheet) { PillsSheet() }
+            .alert(L("Lần tới sẽ cách lần trước quá 24 giờ", "The next dose will be more than 24 hours after the last one"),
+                   isPresented: Binding(get: { pendingTime != nil }, set: { if !$0 { pendingTime = nil } })) {
+                Button(L("Vẫn đổi", "Change anyway"), role: .destructive) {
+                    if let pending = pendingTime {
+                        model.update { $0.changeMainTime(hour: pending.hour, minute: pending.minute, now: .now) }
+                    }
+                    pendingTime = nil
+                }
+                Button(L("Giữ giờ cũ", "Keep the current time"), role: .cancel) { pendingTime = nil }
+            } message: {
+                if let pending = pendingTime {
+                    Text(L("Lần tới: \(TodayText.relativeDay(pending.preview.dueAt, from: .now)) \(TimeFormatting.vn(pending.preview.dueAt)). Xem tờ hướng dẫn thuốc trước khi giãn khoảng cách.",
+                           "Next dose: \(TodayText.relativeDay(pending.preview.dueAt, from: .now)) \(TimeFormatting.vn(pending.preview.dueAt)). Check the leaflet before stretching the gap."))
+                }
+            }
             .confirmationDialog(L("Gỡ kết nối với \(model.partner)?", "Disconnect from \(model.partner)?"), isPresented: $confirmDisconnect, titleVisibility: .visible) {
                 Button(L("Gỡ kết nối", "Disconnect"), role: .destructive) { model.disconnect() }
             } message: {
@@ -137,7 +154,7 @@ struct SettingsView: View {
         }
     }
 
-    /// Giờ chính dưới dạng `Date` hôm nay theo giờ VN, để dùng với DatePicker.
+    /// The main time as today's `Date` in Vietnam time, for the DatePicker.
     private var mainTime: Binding<Date> {
         Binding(
             get: {
@@ -146,9 +163,12 @@ struct SettingsView: View {
             },
             set: { date in
                 let parts = VietnamClock.calendar.dateComponents([.hour, .minute], from: date)
-                model.update {
-                    $0.settings.mainHour = parts.hour ?? 21
-                    $0.settings.mainMinute = parts.minute ?? 0
+                let hour = parts.hour ?? 21, minute = parts.minute ?? 0
+                let preview = model.planner.previewMainTimeChange(hour: hour, minute: minute, now: .now)
+                if preview.exceedsMaxInterval {
+                    pendingTime = (hour, minute, preview)
+                } else {
+                    model.update { $0.changeMainTime(hour: hour, minute: minute, now: .now) }
                 }
             }
         )
@@ -169,7 +189,7 @@ struct SettingsView: View {
     }
 }
 
-/// Nhập số viên lần đầu, hoặc thêm viên khi mua vỉ mới.
+/// Enter the first pill count, or add pills after buying a new pack.
 struct PillsSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

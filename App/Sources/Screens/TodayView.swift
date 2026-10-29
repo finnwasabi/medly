@@ -4,11 +4,18 @@ import SwiftUI
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     @State private var pillsSheet = false
+    @State private var confirmRealign: ResetPreview?
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// Side by side normally, stacked at accessibility text sizes so nothing overflows the screen.
+    private var rowLayout: AnyLayout {
+        typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
+    }
 
     var body: some View {
         NavigationStack {
-            // Vẽ lại mỗi phút cho đếm ngược. Dùng giờ thật chứ không dùng `context.date` (mốc đầu phút),
-            // không thì lần vừa bấm "Đã uống" nằm sau `now` và bị bỏ qua.
+            // Redraws every minute for the countdowns. Uses the real time, not `context.date` (the start of the minute),
+            // otherwise a dose taken a moment ago lies after `now` and is ignored.
             TimelineView(.everyMinute) { _ in
                 let now = Date.now
                 ScrollView {
@@ -40,6 +47,9 @@ struct TodayView: View {
             Text(model.greeting)
                 .font(.largeTitle.bold())
                 .foregroundStyle(Palette.text)
+                // Long names wrap to two lines and shrink a little rather than push the layout.
+                .lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
+                .minimumScaleFactor(0.7)
         }
         .padding(.top, 12)
     }
@@ -81,7 +91,8 @@ struct TodayView: View {
             if now >= dose.dueAt {
                 StatusPill(status: .late)
                 timeBlock(title: L("Đã quá giờ uống", "Past pill time by"), time: TodayText.duration(now.timeIntervalSince(dose.dueAt)), showsVN: false,
-                          local: L("giờ uống \(TimeFormatting.vn(dose.dueAt))", "pill time \(TimeFormatting.vn(dose.dueAt))"))
+                          local: L("giờ uống \(TodayText.relativeDay(dose.dueAt, from: now)) \(TimeFormatting.vn(dose.dueAt))",
+                                   "pill time \(TodayText.relativeDay(dose.dueAt, from: now)) \(TimeFormatting.vn(dose.dueAt))"))
                 warning(now < dose.deadlineAt
                     ? L("Còn \(TodayText.duration(dose.deadlineAt.timeIntervalSince(now))) tới hạn chót 24 giờ", "\(TodayText.duration(dose.deadlineAt.timeIntervalSince(now))) left until the 24-hour deadline")
                     : L("Đã quá hạn chót \(TodayText.duration(now.timeIntervalSince(dose.deadlineAt))). Xem tờ hướng dẫn thuốc hoặc hỏi bác sĩ, dược sĩ.", "Past the deadline by \(TodayText.duration(now.timeIntervalSince(dose.deadlineAt))). Check the leaflet or ask a doctor or pharmacist."))
@@ -93,6 +104,7 @@ struct TodayView: View {
                 Text(L("Lần sau: \(TodayText.relativeDay(dose.dueAt, from: now)) \(TimeFormatting.vn(dose.dueAt)), hạn chót \(TimeFormatting.clockTime(dose.deadlineAt, in: VietnamClock.timeZone)).", "Next: \(TodayText.relativeDay(dose.dueAt, from: now)) \(TimeFormatting.vn(dose.dueAt)), deadline \(TimeFormatting.clockTime(dose.deadlineAt, in: VietnamClock.timeZone))."))
                     .font(.callout)
                     .foregroundStyle(Palette.textSecondary)
+                realignButton(dose: dose, now: now)
                 let undoLeft = planner.settings.undoWindow - now.timeIntervalSince(takenAt)
                 if undoLeft > 0 {
                     Button(L("Hoàn tác (còn \(TodayText.duration(undoLeft)))", "Undo (\(TodayText.duration(undoLeft)) left)")) { Task { await model.undo() } }
@@ -107,6 +119,7 @@ struct TodayView: View {
                 Text(L("Còn \(TodayText.duration(dose.dueAt.timeIntervalSince(now)))", "In \(TodayText.duration(dose.dueAt.timeIntervalSince(now)))"))
                     .font(.headline)
                     .foregroundStyle(Palette.textSecondary)
+                realignButton(dose: dose, now: now)
                 takeButton
                 Text(L("Uống sớm cũng được, lần sau sẽ nhắc sớm theo.", "Taking it early is fine, the next reminder moves earlier too."))
                     .font(.footnote)
@@ -116,7 +129,7 @@ struct TodayView: View {
         .card()
     }
 
-    /// Các lần hụt trong 7 ngày gần nhất chưa uống bù. App không khuyên bù hay không, chỉ trỏ về tờ hướng dẫn.
+    /// Missed doses from the last 7 days that are not made up. The app gives no advice on making up, it only points to the leaflet.
     private func missedCard(_ records: [DoseRecord]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             StatusPill(status: .missed)
@@ -124,7 +137,7 @@ struct TodayView: View {
                 .font(.headline)
                 .foregroundStyle(Palette.text)
             ForEach(records) { record in
-                HStack {
+                rowLayout {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(TodayText.dayTitle(record.scheduledAt))
                             .font(.body.weight(.medium))
@@ -133,7 +146,7 @@ struct TodayView: View {
                             .font(.footnote)
                             .foregroundStyle(Palette.textSecondary)
                     }
-                    Spacer()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     Button(L("Đã uống bù", "Mark made up")) { model.markMadeUp(missedAt: record.scheduledAt) }
                         .buttonStyle(.bordered)
                         .tint(DoseStatus.madeUp.foreground)
@@ -144,6 +157,30 @@ struct TodayView: View {
                 .foregroundStyle(Palette.textSecondary)
         }
         .card()
+    }
+
+    /// Shown when an early dose pulled the next reminder before the main time.
+    @ViewBuilder
+    private func realignButton(dose: Dose, now: Date) -> some View {
+        if dose.dueAt < dose.slotAt.addingTimeInterval(-60), let preview = model.planner.resetPreview(now: now) {
+            let main = TimeFormatting.clockTime(preview.dueAt, in: VietnamClock.timeZone)
+            Button(L("Về lại giờ chính \(main)", "Back to the main time \(main)")) { confirmRealign = preview }
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(Palette.primary)
+                .alert(L("Về lại giờ chính?", "Back to the main time?"),
+                       isPresented: Binding(get: { confirmRealign != nil }, set: { if !$0 { confirmRealign = nil } })) {
+                    Button(L("Về lại \(main)", "Move to \(main)"), role: preview.exceedsMaxInterval ? .destructive : nil) {
+                        model.update { _ = $0.resetToMainTime(now: .now) }
+                        confirmRealign = nil
+                    }
+                    Button(L("Giữ như cũ", "Keep it"), role: .cancel) { confirmRealign = nil }
+                } message: {
+                    Text(preview.exceedsMaxInterval
+                         ? L("Lần tới sẽ cách lần trước quá 24 giờ. Xem tờ hướng dẫn thuốc trước khi giãn khoảng cách.",
+                             "The next dose will be more than 24 hours after the last one. Check the leaflet before stretching the gap.")
+                         : L("Lần tới sẽ về lại \(main) giờ VN.", "The next dose moves back to \(main) VN time."))
+                }
+        }
     }
 
     private var takeButton: some View {
@@ -168,7 +205,8 @@ struct TodayView: View {
             Text(title)
                 .font(.callout)
                 .foregroundStyle(Palette.textSecondary)
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+                                          : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))) {
                 Text(time)
                     .font(.system(size: 48, weight: .bold))
                     .foregroundStyle(Palette.text)
@@ -223,7 +261,8 @@ struct TodayView: View {
         let days: [(name: String, status: DoseStatus)] = (0..<7).reversed().map { back in
             let day = calendar.date(byAdding: .day, value: -back, to: today)!
             let name = TodayText.shortWeekday(calendar.component(.weekday, from: day))
-            return (name, statuses[day].map(DoseStatus.init) ?? .upcoming)
+            // A past day without a record yet is the overdue dose still in its late window.
+            return (name, statuses[day].map(DoseStatus.init) ?? (day < today ? .late : .upcoming))
         }
         return VStack(alignment: .leading, spacing: 12) {
             Text(L("7 ngày qua", "Last 7 days"))
@@ -243,12 +282,14 @@ struct TodayView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
+            // Seven columns cannot grow forever; the rest of the screen still scales fully.
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         }
         .card()
     }
 }
 
-/// Chữ hiển thị trên màn Hôm nay. Ngày và giờ chính luôn theo giờ VN.
+/// Display texts. Days and main times always follow Vietnam time.
 enum TodayText {
     private static let weekdaysVI = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"]
     private static let weekdaysEN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -257,12 +298,12 @@ enum TodayText {
     static let shortWeekdaysVI = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]
     static let shortWeekdaysEN = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
 
-    /// Tên thứ viết tắt theo `weekday` của Calendar (1 là Chủ Nhật).
+    /// Short weekday name for a Calendar `weekday` (1 is Sunday).
     static func shortWeekday(_ weekday: Int) -> String {
         (AppLanguage.current == .en ? shortWeekdaysEN : shortWeekdaysVI)[weekday - 1]
     }
 
-    /// "Thứ Năm, 29 tháng 10" hoặc "Thursday, 29 October", theo ngày VN.
+    /// "Thứ Năm, 29 tháng 10" or "Thursday, 29 October", by the Vietnam date.
     static func dayTitle(_ date: Date) -> String {
         let parts = VietnamClock.calendar.dateComponents([.weekday, .day, .month], from: date)
         let weekday = (parts.weekday ?? 1) - 1, day = parts.day ?? 1, month = parts.month ?? 1
@@ -273,18 +314,19 @@ enum TodayText {
         L("Tháng \(month), \(String(year))", "\(monthsEN[month - 1]) \(String(year))")
     }
 
-    /// "hôm nay", "mai", hoặc thứ trong tuần, theo ngày VN.
+    /// "today", "tomorrow" or a weekday, by the Vietnam date.
     static func relativeDay(_ date: Date, from now: Date) -> String {
         let calendar = VietnamClock.calendar
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 0
         switch days {
+        case -1: return L("hôm qua", "yesterday")
         case 0: return L("hôm nay", "today")
         case 1: return L("mai", "tomorrow")
         default: return dayTitle(date)
         }
     }
 
-    /// "2 giờ 10 phút" hoặc "2 h 10 min". Làm tròn lên phút để đếm ngược không hiện "0 phút".
+    /// "2 giờ 10 phút" or "2 h 10 min". Rounds up so a countdown never shows "0 min".
     static func duration(_ seconds: TimeInterval) -> String {
         let minutes = Int((max(0, seconds) / 60).rounded(.up))
         let h = minutes / 60, m = minutes % 60
@@ -292,7 +334,7 @@ enum TodayText {
         return m == 0 ? L("\(h) giờ", "\(h) h") : L("\(h) giờ \(m) phút", "\(h) h \(m) min")
     }
 
-    /// Giờ nơi máy đang ở, ẩn khi máy đang theo giờ VN.
+    /// The local time where the phone is, hidden when the phone is on Vietnam time.
     static func localLine(_ date: Date) -> String? {
         let zone = TimeZone.autoupdatingCurrent
         guard zone.secondsFromGMT(for: date) != VietnamClock.timeZone.secondsFromGMT(for: date) else { return nil }
@@ -301,7 +343,7 @@ enum TodayText {
         return L("tức \(time) tại \(place)", "that is \(time) in \(place)")
     }
 
-    /// Còn hiện trạng thái "Đã uống": cùng ngày VN, hoặc còn trong thời gian hoàn tác.
+    /// Keep showing "Taken": same Vietnam day, or still within the undo window.
     static func isRecent(_ takenAt: Date, now: Date, undoWindow: TimeInterval) -> Bool {
         VietnamClock.calendar.isDate(takenAt, inSameDayAs: now) || now.timeIntervalSince(takenAt) <= undoWindow
     }

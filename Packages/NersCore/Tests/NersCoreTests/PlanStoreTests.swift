@@ -3,7 +3,7 @@ import Testing
 @testable import NersCore
 
 @Suite struct PlanStoreTests {
-    /// Mỗi test một thư mục tạm riêng, thư mục con chưa tồn tại để thử luôn việc tự tạo.
+    /// A fresh temporary directory per test; the subdirectory does not exist yet, which also tests creating it.
     let store = PlanStore(url: FileManager.default.temporaryDirectory
         .appendingPathComponent("PlanStoreTests-\(UUID().uuidString)")
         .appendingPathComponent("state.json"))

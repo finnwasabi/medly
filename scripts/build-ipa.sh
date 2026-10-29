@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build file .ipa không ký để cài qua SideStore (SideStore tự ký lại bằng Apple ID của máy cài).
-# VERSION và BUILD (tuỳ chọn) đè số phiên bản trong project.yml, CI truyền từ tag.
+# Builds an unsigned .ipa for SideStore (SideStore re-signs it with the installing Apple ID).
+# Optional VERSION and BUILD override the numbers in project.yml; CI passes them from the tag.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

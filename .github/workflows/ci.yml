@@ -1,5 +1,5 @@
-# Chạy test NersCore, test server và build .ipa cho mỗi PR và mỗi lần đẩy lên main hay develop.
-# Tên job `test` là status check bắt buộc của ruleset nhánh, đổi tên thì sửa cả ruleset.
+# Runs the NersCore tests, the server tests and an .ipa build for every PR and every push to main or develop.
+# The job name `test` is the required status check in the branch rulesets; rename both together.
 name: CI
 
 on:

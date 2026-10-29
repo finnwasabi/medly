@@ -5,6 +5,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-29
+
+### Added
+- "Back to the main time" on the Today screen after an early dose pulled the schedule earlier, with a warning when the next dose would exceed 24 hours.
+- The bot speaks English with `BOT_LANGUAGE=en`.
+- A randomized test that runs 12,000 user actions against the scheduling invariants.
+
+### Fixed
+- Changing the pill time in Settings now takes effect. Moving it earlier applies from the next day; moving it later asks for confirmation because the gap exceeds 24 hours. Before, the 24-hour rule kept reminding at the old time.
+- Layouts no longer overflow at the largest accessibility text sizes; the first-launch screens scroll when needed.
+- Long names wrap cleanly and are capped at 40 characters.
+- An overdue dose from yesterday shows as late in the week strip instead of upcoming, and its time says "yesterday".
+
+### Changed
+- Code comments, the specification and the server docs are in English.
+
 ## [0.1.2] - 2026-10-29
 
 ### Added
@@ -35,7 +51,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/ners-daily/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/finnwasabi/ners-daily/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/finnwasabi/ners-daily/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/finnwasabi/ners-daily/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/finnwasabi/ners-daily/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/finnwasabi/ners-daily/releases/tag/v0.1.0

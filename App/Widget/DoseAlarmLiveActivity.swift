@@ -9,7 +9,7 @@ struct NersDailyWidgets: WidgetBundle {
     }
 }
 
-/// Màn khoá và Dynamic Island khi báo thức đang kêu hoặc đang hoãn.
+/// Lock screen and Dynamic Island while an alarm rings or is snoozed.
 struct DoseAlarmLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: AlarmAttributes<DoseAlarmMetadata>.self) { context in

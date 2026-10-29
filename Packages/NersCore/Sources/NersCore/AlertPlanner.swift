@@ -1,23 +1,23 @@
 import Foundation
 
-/// Một lần báo đã quyết xong: dùng báo thức AlarmKit hay noti thường, kèm chữ hiển thị.
+/// A decided alert: an AlarmKit alarm or a plain notification, with its texts.
 public struct PlannedAlert: Equatable, Sendable {
     public var date: Date
-    /// Đúng: báo thức AlarmKit, kêu cả khi im lặng và Focus. Sai: noti thường, theo chế độ máy.
+    /// True: an AlarmKit alarm that rings on silent and in Focus. False: a plain notification that follows the phone's mode.
     public var usesAlarm: Bool
     public var title: String
-    /// Dòng phụ, chỉ noti thường hiện được.
+    /// Secondary line, only plain notifications can show it.
     public var body: String
 }
 
 public enum AlertPlanner {
-    /// iOS chỉ giữ 64 noti đang chờ mỗi app.
+    /// iOS keeps only 64 pending notifications per app.
     public static let notificationLimit = 64
 
-    /// Đổi chuỗi mốc nhắc thành các lần báo.
-    /// `vibrateOnly`: mọi lần nhắc là noti thường, riêng từ hạn chót trở đi luôn là báo thức có tiếng.
-    /// `alarmsAvailable` sai (chưa có quyền AlarmKit): tất cả thành noti thường để ít nhất vẫn có nhắc.
-    /// Noti chỉ lấy `notificationLimit` lần sớm nhất; app nạp lại mỗi lần mở hoặc bấm "Đã uống".
+    /// Turns reminder events into alerts.
+    /// `vibrateOnly`: reminders are plain notifications, but from the deadline on they are always ringing alarms.
+    /// `alarmsAvailable` false (no AlarmKit permission): everything becomes a notification so reminders still happen.
+    /// Only the earliest `notificationLimit` notifications are kept; the app refills on every launch and every "Taken".
     public static func alerts(
         for events: [ReminderEvent], vibrateOnly: Bool, alarmsAvailable: Bool = true, refillMessage: String?,
         missedMessage: String? = nil, language: Language = .vi
@@ -41,8 +41,8 @@ public enum AlertPlanner {
         return result
     }
 
-    /// Dòng kèm mỗi lần báo khi còn lần hụt chưa bù. Ngắn vì tiêu đề báo thức bị cắt; không khuyên bù hay không,
-    /// lời trỏ về tờ hướng dẫn thuốc nằm trên thẻ viên hụt trong app.
+    /// Line added to every alert while missed doses are not made up. Short because alarm titles get truncated; it gives no advice,
+    /// the pointer to the leaflet lives on the missed card in the app.
     public static func missedMessage(count: Int, language: Language = .vi) -> String? {
         guard count > 0 else { return nil }
         return language == .en ? "\(count) missed \(count == 1 ? "pill" : "pills") not made up" : "còn \(count) viên hụt chưa uống bù"
