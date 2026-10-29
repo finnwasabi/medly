@@ -1,3 +1,4 @@
+import NersCore
 import SwiftUI
 import UIKit
 
@@ -124,5 +125,16 @@ struct SecondaryButtonStyle: ButtonStyle {
             .foregroundStyle(Palette.primary)
             .background(Palette.primarySoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .opacity(configuration.isPressed ? 0.8 : 1)
+    }
+}
+
+extension DoseStatus {
+    init(_ status: NersCore.DoseStatus) {
+        switch status {
+        case .taken: self = .taken
+        case .late: self = .late
+        case .missed: self = .missed
+        case .paused: self = .paused
+        }
     }
 }

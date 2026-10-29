@@ -109,3 +109,37 @@ import Testing
         #expect(roundTrip == settings)
     }
 }
+
+@Suite struct DayAndPackTests {
+    @Test func dayStatusesPickWorstPerVietnamDay() {
+        var planner = Planner()
+        planner.markTaken(at: vn(2026, 10, 1, 21))
+        planner.markTaken(at: vn(2026, 10, 2, 23))
+        // Ngày 3 bỏ, ngày 4 uống lại.
+        planner.markTaken(at: vn(2026, 10, 4, 21))
+        let days = planner.dayStatuses(now: vn(2026, 10, 5, 8))
+        let start = { VietnamClock.calendar.startOfDay(for: vn(2026, 10, $0, 12)) }
+        #expect(days[start(1)] == .taken)
+        #expect(days[start(2)] == .late)
+        #expect(days[start(3)] == .missed)
+        #expect(days[start(4)] == .taken)
+        #expect(days[start(5)] == nil)
+    }
+
+    @Test func onePackCountsDownAndAsksRefill() {
+        var planner = Planner()
+        planner.addPills(28, now: vn(2026, 10, 1, 8))
+        for day in 0..<21 {
+            planner.markTaken(at: vn(2026, 10, 1, 21).addingTimeInterval(TimeInterval(day) * 24 * hour))
+        }
+        let pills = planner.settings.pills!
+        #expect(pills.remaining == 7)
+        #expect(pills.refillMessage(planner.settings.refillReminder) == "còn 7 viên, nhớ mua thêm")
+        #expect(planner.daysTaken(now: vn(2026, 10, 22, 8)) == 21)
+        for day in 21..<30 {
+            planner.markTaken(at: vn(2026, 10, 1, 21).addingTimeInterval(TimeInterval(day) * 24 * hour))
+        }
+        #expect(planner.settings.pills?.remaining == 0)
+        #expect(planner.history.count == 30)
+    }
+}

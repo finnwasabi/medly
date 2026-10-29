@@ -15,6 +15,8 @@ final class AppModel {
     var issue: String? { scheduleIssue ?? dataIssue }
     private var dataIssue: String?
     private var scheduleIssue: String?
+    /// Lời nhắn mới nhất Tùng gửi qua bot, nhận về khi đồng bộ.
+    private(set) var message: String? = UserDefaults.standard.string(forKey: "message")
 
     /// Chỉ rung: các lần nhắc là noti thường theo chế độ máy, riêng hạn chót vẫn là báo thức có tiếng.
     var vibrateOnly: Bool {
@@ -57,6 +59,13 @@ final class AppModel {
         guard planner.undoLastTaken(now: now) else { return }
         persist()
         await resync()
+    }
+
+    /// Mọi thay đổi cài đặt, số viên, tạm dừng, sửa giờ uống đi qua đây: lưu rồi nạp lại lịch nhắc.
+    func update(_ change: (inout Planner) -> Void) {
+        change(&planner)
+        persist()
+        Task { await resync() }
     }
 
     private func persist() {

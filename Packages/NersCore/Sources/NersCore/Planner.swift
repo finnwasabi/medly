@@ -74,6 +74,29 @@ public struct Planner: Sendable {
     /// Lịch sử đầy đủ để hiển thị: lần uống (đúng hạn hoặc trễ), lần hụt, lần rơi vào tạm dừng.
     public func timeline(now: Date) -> [DoseRecord] { walk(now: now).records }
 
+    /// Trạng thái từng ngày VN đã qua (khoá là đầu ngày VN), cho lịch và dải 7 ngày.
+    /// Một ngày có nhiều bản ghi thì lấy trạng thái xấu nhất: hụt, trễ, đã uống, tạm dừng.
+    public func dayStatuses(now: Date) -> [Date: DoseStatus] {
+        func rank(_ status: DoseStatus) -> Int {
+            switch status {
+            case .missed: 3
+            case .late: 2
+            case .taken: 1
+            case .paused: 0
+            }
+        }
+        var result: [Date: DoseStatus] = [:]
+        for record in timeline(now: now) {
+            // Mỗi bản ghi thuộc giờ chính gần nó nhất, như cách tính lần kế sau một lần uống.
+            let moment = record.takenAt ?? record.scheduledAt
+            let slot = VietnamClock.firstMainTime(after: moment.addingTimeInterval(-12 * 3600), hour: settings.mainHour, minute: settings.mainMinute)
+            let day = VietnamClock.calendar.startOfDay(for: slot)
+            if let existing = result[day], rank(existing) >= rank(record.status) { continue }
+            result[day] = record.status
+        }
+        return result
+    }
+
     /// Mốc kêu lại khi bấm hoãn. Không vượt quá hạn chót, hạn chót giữ nguyên.
     public func snoozeUntil(now: Date) -> Date {
         let wake = now.addingTimeInterval(max(60, settings.snoozeInterval))
@@ -199,7 +222,7 @@ public struct Planner: Sendable {
         var state = WalkState(dose: doseAfterTake(first), records: [first], followsTake: true)
         for take in taken.dropFirst() {
             advance(&state, before: take.takenAt!)
-            if take.takenAt! > state.dose.deadlineAt {
+            if take.takenAt! > state.dose.deadlineAt.addingTimeInterval(max(0, settings.lateTolerance)) {
                 var record = take
                 record.status = .late
                 state.records.append(record)
