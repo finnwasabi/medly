@@ -46,6 +46,9 @@ export function statusText(snapshot, now = Date.now()) {
     const refill = s.refillReminder?.enabled && s.pillsRemaining <= s.refillReminder.daysBefore ? ', cần mua thêm' : '';
     lines.push(`Còn ${s.pillsRemaining}/${s.pillsTotal} viên${refill}.`);
   }
+  if (s.signatureExpiresAt && Date.parse(s.signatureExpiresAt) - now < 2 * 24 * 3600 * 1000) {
+    lines.push(`🔑 App hết hạn chữ ký lúc ${vnTime(s.signatureExpiresAt)} ${vnDay(s.signatureExpiresAt)}, nhắc Ner mở SideStore làm mới.`);
+  }
   const age = now - Date.parse(s.updatedAt);
   lines.push(age > 24 * 3600 * 1000
     ? `⚠️ Chưa đồng bộ từ ${vnTime(s.updatedAt)} ${vnDay(s.updatedAt)}.`
@@ -84,7 +87,8 @@ export function validateSnapshot(s) {
   for (const key of ['updatedAt', 'nextDueAt', 'deadlineAt']) {
     if (typeof s[key] !== 'string' || !ISO.test(s[key])) return `${key} must be a UTC ISO 8601 timestamp`;
   }
-  for (const key of ['lastTakenAt', 'pausedUntil']) {
+  for (const key of ['lastTakenAt', 'pausedUntil', 'signatureExpiresAt']) {
+    if (key === 'signatureExpiresAt' && s[key] === undefined) continue;
     if (s[key] !== null && (typeof s[key] !== 'string' || !ISO.test(s[key]))) return `${key} must be a timestamp or null`;
   }
   for (const key of ['daysTaken', 'missedCount']) {
