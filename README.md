@@ -12,11 +12,21 @@ App iOS nhắc uống thuốc hằng ngày, luôn tính theo giờ Việt Nam d�
 - iOS 26 trở lên.
 - Cài qua [SideStore](https://sidestore.io) với Apple ID miễn phí.
 
+## Cài đặt
+
+Trong SideStore: Sources, nút `+`, dán địa chỉ source rồi cài Ner's Daily. Có bản mới thì SideStore tự báo.
+
+```
+https://github.com/finnwasabi/ners-daily/releases/latest/download/source.json
+```
+
 ## Phát triển
 
 - Xcode 27, [XcodeGen](https://github.com/yonaskolb/XcodeGen): `xcodegen generate` rồi mở `NersDaily.xcodeproj`.
 - `scripts/build-ipa.sh` build file `.ipa` không ký để cài qua SideStore.
 - Đặc tả logic và hợp đồng dữ liệu: [docs/spec.md](docs/spec.md).
+- Dịch vụ đồng bộ và bot Telegram: [server/](server/README.md).
+- Phát hành: gắn tag `vX.Y.Z`, GitHub Actions build `.ipa` và `source.json` rồi đăng lên Releases.
 
 ## Giấy phép
 
