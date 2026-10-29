@@ -15,6 +15,7 @@ const spec = {
   daysTaken: 12,
   missedCount: 1,
   lateCount: 0,
+  madeUpCount: 0,
   pillsTotal: 28,
   pillsRemaining: 16,
   refillReminder: { enabled: true, daysBefore: 7 },
@@ -93,6 +94,14 @@ test('change text covers miss, late, pause and refill', () => {
   assert.equal(changeText(spec, { ...spec, updatedAt: '2026-10-27T15:00:00Z' }), null);
 });
 
+test('make-up dose is reported and counted apart from missed ones', () => {
+  const missed = { ...spec, missedCount: 2, madeUpCount: 0 };
+  const madeUp = { ...missed, updatedAt: '2026-10-27T15:00:00Z', madeUpCount: 1 };
+  assert.match(changeText(missed, madeUp), /uống bù viên hụt \(còn 1 viên hụt chưa bù\)/);
+  assert.match(statusText(madeUp, Date.parse('2026-10-28T01:00:00Z')), /hụt 1, đã uống bù 1\./);
+  assert.match(validateSnapshot({ ...spec, madeUpCount: -1 }), /madeUpCount/);
+});
+
 test('undo is reported as undo, not as a new dose at the older time', () => {
   const undone = { ...spec, updatedAt: '2026-10-27T14:05:00Z', lastTakenAt: '2026-10-26T14:01:00Z' };
   assert.equal(changeText(spec, undone), '↩️ Ner đã hoàn tác hoặc sửa giờ lần uống gần nhất.');
@@ -106,10 +115,6 @@ test('status text marks data older than 24 hours', () => {
   assert.match(fresh, /Cập nhật lúc 21:03 giờ VN/);
   assert.match(statusText(spec, Date.parse('2026-10-29T01:00:00Z')), /Chưa đồng bộ từ 21:03/);
   assert.equal(statusText(null), 'Chưa nhận được dữ liệu nào từ app.');
-  const expiring = { ...spec, signatureExpiresAt: '2026-10-29T14:00:00Z' };
-  assert.equal(validateSnapshot(expiring), null);
-  assert.match(statusText(expiring, Date.parse('2026-10-28T01:00:00Z')), /hết hạn chữ ký lúc 21:00/);
-  assert.doesNotMatch(statusText({ ...spec, signatureExpiresAt: '2026-11-03T14:00:00Z' }, Date.parse('2026-10-28T01:00:00Z')), /chữ ký/);
 });
 
 test('bot answers only its chat and sends the 09:00 report once a day', async () => {

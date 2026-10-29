@@ -41,13 +41,12 @@ export function statusText(snapshot, now = Date.now()) {
   } else {
     lines.push(`Lần tới: ${vnTime(s.nextDueAt)} giờ VN ${vnDay(s.nextDueAt)}, hạn chót ${vnTime(s.deadlineAt)}.`);
   }
-  lines.push(`Đã uống ${s.daysTaken} ngày, trễ ${s.lateCount ?? 0}, hụt ${s.missedCount}.`);
+  const madeUp = s.madeUpCount ?? 0;
+  lines.push(`Đã uống ${s.daysTaken} ngày, trễ ${s.lateCount ?? 0}, hụt ${s.missedCount - madeUp}`
+    + (madeUp ? `, đã uống bù ${madeUp}.` : '.'));
   if (s.pillsTotal != null) {
     const refill = s.refillReminder?.enabled && s.pillsRemaining <= s.refillReminder.daysBefore ? ', cần mua thêm' : '';
     lines.push(`Còn ${s.pillsRemaining}/${s.pillsTotal} viên${refill}.`);
-  }
-  if (s.signatureExpiresAt && Date.parse(s.signatureExpiresAt) - now < 2 * 24 * 3600 * 1000) {
-    lines.push(`🔑 App hết hạn chữ ký lúc ${vnTime(s.signatureExpiresAt)} ${vnDay(s.signatureExpiresAt)}, nhắc Ner mở SideStore làm mới.`);
   }
   const age = now - Date.parse(s.updatedAt);
   lines.push(age > 24 * 3600 * 1000
@@ -70,6 +69,9 @@ export function changeText(previous, next) {
   }
   if (previous && next.lateCount > (previous.lateCount ?? 0)) parts.push(`🟡 Có thêm lần uống trễ (tổng ${next.lateCount}).`);
   if (previous && next.missedCount > previous.missedCount) parts.push(`🔴 Có thêm viên hụt (tổng ${next.missedCount}).`);
+  if (previous && (next.madeUpCount ?? 0) > (previous.madeUpCount ?? 0)) {
+    parts.push(`🔵 Ner đã uống bù viên hụt (còn ${next.missedCount - next.madeUpCount} viên hụt chưa bù).`);
+  }
   if (next.pausedUntil && next.pausedUntil !== previous?.pausedUntil) {
     parts.push(`⏸️ Ner tạm dừng nhắc tới ${vnTime(next.pausedUntil)} ${vnDay(next.pausedUntil)}.`);
   }
@@ -87,14 +89,15 @@ export function validateSnapshot(s) {
   for (const key of ['updatedAt', 'nextDueAt', 'deadlineAt']) {
     if (typeof s[key] !== 'string' || !ISO.test(s[key])) return `${key} must be a UTC ISO 8601 timestamp`;
   }
-  for (const key of ['lastTakenAt', 'pausedUntil', 'signatureExpiresAt']) {
-    if (key === 'signatureExpiresAt' && s[key] === undefined) continue;
+  for (const key of ['lastTakenAt', 'pausedUntil']) {
     if (s[key] !== null && (typeof s[key] !== 'string' || !ISO.test(s[key]))) return `${key} must be a timestamp or null`;
   }
   for (const key of ['daysTaken', 'missedCount']) {
     if (!Number.isInteger(s[key]) || s[key] < 0) return `${key} must be a non-negative integer`;
   }
-  if (s.lateCount !== undefined && (!Number.isInteger(s.lateCount) || s.lateCount < 0)) return 'lateCount must be a non-negative integer';
+  for (const key of ['lateCount', 'madeUpCount']) {
+    if (s[key] !== undefined && (!Number.isInteger(s[key]) || s[key] < 0)) return `${key} must be a non-negative integer`;
+  }
   for (const key of ['pillsTotal', 'pillsRemaining']) {
     if (s[key] !== null && (!Number.isInteger(s[key]) || s[key] < 0)) return `${key} must be a non-negative integer or null`;
   }

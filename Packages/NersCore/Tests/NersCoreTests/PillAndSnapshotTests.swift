@@ -54,11 +54,11 @@ import Testing
       "daysTaken": 12,
       "missedCount": 1,
       "lateCount": 0,
+      "madeUpCount": 0,
       "pillsTotal": 28,
       "pillsRemaining": 16,
       "refillReminder": { "enabled": true, "daysBefore": 7 },
-      "pausedUntil": null,
-      "signatureExpiresAt": null
+      "pausedUntil": null
     }
     """
 

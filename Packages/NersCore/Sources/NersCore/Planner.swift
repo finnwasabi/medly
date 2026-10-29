@@ -71,15 +71,41 @@ public struct Planner: Sendable {
 
     public func lastTaken(now: Date) -> DoseRecord? { takes(upTo: now).last }
 
-    /// Lịch sử đầy đủ để hiển thị: lần uống (đúng hạn hoặc trễ), lần hụt, lần rơi vào tạm dừng.
-    public func timeline(now: Date) -> [DoseRecord] { walk(now: now).records }
+    /// Lịch sử đầy đủ để hiển thị: lần uống (đúng hạn hoặc trễ), lần hụt, lần uống bù, lần rơi vào tạm dừng.
+    public func timeline(now: Date) -> [DoseRecord] { resolved(now: now).records }
+
+    /// Số lần hụt đã được uống bù. `missedCount` vẫn đếm cả các lần này.
+    public func madeUpCount(now: Date) -> Int { resolved(now: now).matched }
+
+    /// Các lần hụt chưa uống bù trong `days` ngày gần nhất, mới nhất trước.
+    public func outstandingMissed(now: Date, days: Int = 7) -> [DoseRecord] {
+        let since = now.addingTimeInterval(-TimeInterval(days) * VietnamClock.day)
+        return timeline(now: now).filter { $0.status == .missed && $0.scheduledAt >= since }.reversed()
+    }
+
+    /// Ghép lần uống bù vào đúng lần hụt nó bù. Lần bù không còn khớp lần hụt nào (ví dụ sau khi sửa giờ uống
+    /// làm lần hụt biến mất) vẫn hiện trong lịch sử để còn xoá được, nhưng không tính là đã bù.
+    private func resolved(now: Date) -> (records: [DoseRecord], matched: Int) {
+        var records = walk(now: now).records
+        var unused = history.filter { $0.status == .madeUp && ($0.takenAt ?? .distantFuture) <= now }
+        var matched = 0
+        for i in records.indices where records[i].status == .missed {
+            guard let k = unused.firstIndex(where: { $0.makesUpFor == records[i].scheduledAt }) else { continue }
+            records[i] = unused.remove(at: k)
+            matched += 1
+        }
+        records += unused
+        records.sort { $0.scheduledAt < $1.scheduledAt }
+        return (records, matched)
+    }
 
     /// Trạng thái từng ngày VN đã qua (khoá là đầu ngày VN), cho lịch và dải 7 ngày.
     /// Một ngày có nhiều bản ghi thì lấy trạng thái xấu nhất: hụt, trễ, đã uống, tạm dừng.
     public func dayStatuses(now: Date) -> [Date: DoseStatus] {
         func rank(_ status: DoseStatus) -> Int {
             switch status {
-            case .missed: 3
+            case .missed: 4
+            case .madeUp: 3
             case .late: 2
             case .taken: 1
             case .paused: 0
@@ -88,7 +114,8 @@ public struct Planner: Sendable {
         var result: [Date: DoseStatus] = [:]
         for record in timeline(now: now) {
             // Mỗi bản ghi thuộc giờ chính gần nó nhất, như cách tính lần kế sau một lần uống.
-            let moment = record.takenAt ?? record.scheduledAt
+            // Lần uống bù thuộc ngày của lần hụt nó bù, không thuộc ngày uống.
+            let moment = record.status == .madeUp ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
             let slot = VietnamClock.firstMainTime(after: moment.addingTimeInterval(-12 * 3600), hour: settings.mainHour, minute: settings.mainMinute)
             let day = VietnamClock.calendar.startOfDay(for: slot)
             if let existing = result[day], rank(existing) >= rank(record.status) { continue }
@@ -160,6 +187,23 @@ public struct Planner: Sendable {
     public mutating func editTakenTime(id: UUID, to date: Date) {
         guard let index = history.firstIndex(where: { $0.id == id }) else { return }
         history[index].takenAt = date
+    }
+
+    /// Uống bù cho lần hụt có `scheduledAt` này. Trừ một viên nếu có đếm. Không đổi lịch nhắc.
+    /// Trả `nil` nếu không có lần hụt nào như vậy hoặc lần đó đã được bù.
+    @discardableResult
+    public mutating func markMadeUp(missedAt scheduledAt: Date, at now: Date) -> DoseRecord? {
+        guard timeline(now: now).contains(where: { $0.status == .missed && $0.scheduledAt == scheduledAt }) else { return nil }
+        let consumed = settings.pills?.consume() ?? false
+        let record = DoseRecord(scheduledAt: scheduledAt, takenAt: now, status: .madeUp, consumedPill: consumed, makesUpFor: scheduledAt)
+        history.append(record)
+        return record
+    }
+
+    /// Xoá một bản ghi trong lịch sử (dùng cho lần uống bù bấm nhầm), trả lại viên nếu đã trừ.
+    public mutating func removeRecord(id: UUID) {
+        guard let index = history.firstIndex(where: { $0.id == id }) else { return }
+        if history.remove(at: index).consumedPill { settings.pills?.restore() }
     }
 
     /// "Về lại giờ gốc" cho lần kế. Trả kết quả để app cảnh báo nếu vượt khoảng tối đa.

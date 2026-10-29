@@ -15,12 +15,9 @@ struct TodayView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         header(now: now)
                         if let issue = model.issue { issueBanner(issue) }
-                        if let expiration = SigningInfo.expiration, expiration.timeIntervalSince(now) < 2 * 24 * 3600 {
-                            issueBanner(expiration > now
-                                ? "App hết hạn chữ ký sau \(TodayText.duration(expiration.timeIntervalSince(now))). Mở SideStore và bấm làm mới để app không ngừng nhắc."
-                                : "App đã hết hạn chữ ký. Mở SideStore và bấm làm mới.")
-                        }
                         if let message = model.message { messageCard(message) }
+                        let missed = model.planner.outstandingMissed(now: now)
+                        if !missed.isEmpty { missedCard(missed) }
                         doseCard(now: now)
                         if let pills = model.planner.settings.pills { pillsCard(pills) }
                         weekCard(now: now)
@@ -115,6 +112,36 @@ struct TodayView: View {
                     .font(.footnote)
                     .foregroundStyle(Palette.textSecondary)
             }
+        }
+        .card()
+    }
+
+    /// Các lần hụt trong 7 ngày gần nhất chưa uống bù. App không khuyên bù hay không, chỉ trỏ về tờ hướng dẫn.
+    private func missedCard(_ records: [DoseRecord]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            StatusPill(status: .missed)
+            Text(records.count == 1 ? "Có 1 lần hụt chưa uống bù" : "Có \(records.count) lần hụt chưa uống bù")
+                .font(.headline)
+                .foregroundStyle(Palette.text)
+            ForEach(records) { record in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(TodayText.dayTitle(record.scheduledAt))
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(Palette.text)
+                        Text("giờ uống \(TimeFormatting.vietnamTime(record.scheduledAt))")
+                            .font(.footnote)
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                    Spacer()
+                    Button("Đã uống bù") { model.markMadeUp(missedAt: record.scheduledAt) }
+                        .buttonStyle(.bordered)
+                        .tint(DoseStatus.madeUp.foreground)
+                }
+            }
+            Text("Có nên uống bù hay không, uống thế nào: xem tờ hướng dẫn thuốc hoặc hỏi bác sĩ, dược sĩ. Bấm nhầm thì xoá trong Lịch sử.")
+                .font(.footnote)
+                .foregroundStyle(Palette.textSecondary)
         }
         .card()
     }

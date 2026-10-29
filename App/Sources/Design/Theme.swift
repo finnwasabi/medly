@@ -16,15 +16,17 @@ enum Palette {
     static let textSecondary = Color(light: 0x6E6166, dark: 0xB8AAB0)
 }
 
-// Trạng thái một lần uống. Màu cố định: xanh lá = đã uống, vàng = trễ, đỏ = hụt, xám = tạm dừng.
+// Trạng thái một lần uống. Màu cố định: xanh lá = đã uống, vàng = trễ, xanh dương = hụt nhưng đã uống bù,
+// đỏ = hụt, xám = tạm dừng. Uống bù cần màu riêng vì ô lịch chỉ có số ngày, không có biểu tượng.
 // Luôn đi kèm chữ và biểu tượng, không dùng màu một mình.
 enum DoseStatus {
-    case taken, late, missed, paused, upcoming
+    case taken, late, madeUp, missed, paused, upcoming
 
     var label: String {
         switch self {
         case .taken: "Đã uống"
         case .late: "Uống trễ"
+        case .madeUp: "Uống bù"
         case .missed: "Hụt"
         case .paused: "Tạm dừng"
         case .upcoming: "Sắp tới"
@@ -35,6 +37,7 @@ enum DoseStatus {
         switch self {
         case .taken: "checkmark.circle.fill"
         case .late: "clock.badge.exclamationmark.fill"
+        case .madeUp: "arrow.uturn.backward.circle.fill"
         case .missed: "xmark.circle.fill"
         case .paused: "pause.circle.fill"
         case .upcoming: "circle.dotted"
@@ -45,6 +48,7 @@ enum DoseStatus {
         switch self {
         case .taken: Color(light: 0xE3F3E9, dark: 0x1E3A2A)
         case .late: Color(light: 0xFFF1D6, dark: 0x3D2F12)
+        case .madeUp: Color(light: 0xE3ECFA, dark: 0x1D2A44)
         case .missed: Color(light: 0xFDE4E4, dark: 0x42191C)
         case .paused, .upcoming: Color(light: 0xEEE9E7, dark: 0x2E2730)
         }
@@ -54,6 +58,7 @@ enum DoseStatus {
         switch self {
         case .taken: Color(light: 0x1F6B41, dark: 0x8FD9AE)
         case .late: Color(light: 0x8A5A00, dark: 0xF2C46B)
+        case .madeUp: Color(light: 0x2B5797, dark: 0x9DBCF2)
         case .missed: Color(light: 0xA8282E, dark: 0xF39A9E)
         case .paused, .upcoming: Color(light: 0x5F5559, dark: 0xC9BEC3)
         }
@@ -135,6 +140,7 @@ extension DoseStatus {
         case .late: self = .late
         case .missed: self = .missed
         case .paused: self = .paused
+        case .madeUp: self = .madeUp
         }
     }
 }

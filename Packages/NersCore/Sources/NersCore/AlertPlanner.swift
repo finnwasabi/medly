@@ -19,7 +19,8 @@ public enum AlertPlanner {
     /// `alarmsAvailable` sai (chưa có quyền AlarmKit): tất cả thành noti thường để ít nhất vẫn có nhắc.
     /// Noti chỉ lấy `notificationLimit` lần sớm nhất; app nạp lại mỗi lần mở hoặc bấm "Đã uống".
     public static func alerts(
-        for events: [ReminderEvent], vibrateOnly: Bool, alarmsAvailable: Bool = true, refillMessage: String?
+        for events: [ReminderEvent], vibrateOnly: Bool, alarmsAvailable: Bool = true, refillMessage: String?,
+        missedMessage: String? = nil
     ) -> [PlannedAlert] {
         var notifications = 0
         var result: [PlannedAlert] = []
@@ -30,11 +31,19 @@ public enum AlertPlanner {
                 notifications += 1
             }
             var title = title(for: event.kind)
-            if let refillMessage { title += ". " + refillMessage.prefix(1).uppercased() + refillMessage.dropFirst() }
+            for line in [missedMessage, refillMessage].compactMap({ $0 }) {
+                title += ". " + line.prefix(1).uppercased() + line.dropFirst()
+            }
             let body = "Hạn chót \(TimeFormatting.vietnamTime(event.deadlineAt))."
             result.append(PlannedAlert(date: event.date, usesAlarm: usesAlarm, title: title, body: body))
         }
         return result
+    }
+
+    /// Dòng kèm mỗi lần báo khi còn lần hụt chưa bù. Ngắn vì tiêu đề báo thức bị cắt; không khuyên bù hay không,
+    /// lời trỏ về tờ hướng dẫn thuốc nằm trên thẻ viên hụt trong app.
+    public static func missedMessage(count: Int) -> String? {
+        count > 0 ? "còn \(count) viên hụt chưa uống bù" : nil
     }
 
     static func title(for kind: ReminderKind) -> String {
