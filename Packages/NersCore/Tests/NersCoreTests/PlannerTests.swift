@@ -83,7 +83,7 @@ import Testing
         var planner = Planner(settings: ReminderSettings(maxInterval: 30 * hour))
         planner.markTaken(at: vn(2026, 10, 27, 21))
         let events = planner.events(now: vn(2026, 10, 27, 21, 1), horizonDays: 2)
-            .filter { $0.deadlineAt == vn(2026, 10, 29, 3) }
+            .filter { $0.deadlineAt == vn(2026, 10, 29, 3) && $0.kind != .overdue }
         #expect(events.filter { $0.kind == .hourly }.map(\.date) == [vn(2026, 10, 28, 22, 15), vn(2026, 10, 28, 23, 15), vn(2026, 10, 29, 0, 15)])
         #expect(events.filter { $0.kind == .final }.count == 8)
         #expect(events.count == 16)
@@ -93,15 +93,45 @@ import Testing
         var planner = Planner(settings: settings)
         planner.markTaken(at: vn(2026, 10, 26, 21, 3))
         #expect(planner.missedCount(now: vn(2026, 10, 27, 21, 3)) == 0)
-        #expect(planner.missedCount(now: vn(2026, 10, 27, 22)) == 1)
-        let dose = planner.currentDose(now: vn(2026, 10, 27, 22))
+        // Quá hạn chót nhưng còn trong cửa sổ trễ 12 giờ: chưa tính hụt, lần đang chờ vẫn là lần quá hạn.
+        #expect(planner.missedCount(now: vn(2026, 10, 27, 22)) == 0)
+        #expect(planner.currentDose(now: vn(2026, 10, 27, 22)).deadlineAt == vn(2026, 10, 27, 21, 3))
+        #expect(planner.missedCount(now: vn(2026, 10, 28, 9, 4)) == 1)
+        let dose = planner.currentDose(now: vn(2026, 10, 28, 10))
         #expect(dose.dueAt == vn(2026, 10, 28, 21))
         #expect(dose.deadlineAt == vn(2026, 10, 28, 21, 3))
-        #expect(planner.timeline(now: vn(2026, 10, 27, 22)).map(\.status) == [.taken, .missed])
+        #expect(planner.timeline(now: vn(2026, 10, 28, 10)).map(\.status) == [.taken, .missed])
 
         planner.markTaken(at: vn(2026, 10, 28, 21, 3))
-        #expect(planner.missedCount(now: vn(2026, 10, 29, 12)) == 1)
-        #expect(planner.missedCount(now: vn(2026, 10, 29, 22)) == 2)
+        #expect(planner.missedCount(now: vn(2026, 10, 29, 22)) == 1)
+        #expect(planner.missedCount(now: vn(2026, 10, 30, 10)) == 2)
+    }
+
+    @Test func takenAfterDeadlineCountsLateNotMissed() {
+        var planner = Planner(settings: settings)
+        planner.markTaken(at: vn(2026, 10, 27, 21))
+        planner.markTaken(at: vn(2026, 10, 28, 22, 30))
+        let now = vn(2026, 10, 28, 22, 31)
+        #expect(planner.missedCount(now: now) == 0)
+        #expect(planner.lateCount(now: now) == 1)
+        #expect(planner.timeline(now: now).map(\.status) == [.taken, .late])
+        let dose = planner.currentDose(now: now)
+        #expect(dose.dueAt == vn(2026, 10, 29, 21))
+        #expect(dose.deadlineAt == vn(2026, 10, 29, 22, 30))
+    }
+
+    @Test func overdueKeepsRingingWithSoundUntilLateWindowEnds() {
+        var planner = Planner(settings: settings)
+        planner.markTaken(at: vn(2026, 10, 27, 21))
+        let deadline = vn(2026, 10, 28, 21)
+        let overdue = planner.events(now: vn(2026, 10, 27, 21, 1), horizonDays: 2)
+            .filter { $0.deadlineAt == deadline && $0.date > deadline }
+        // 3 lần mỗi 5 phút, rồi 15 phút một lần tới hết 3 giờ đầu (11 lần), rồi mỗi giờ tới 12 giờ sau hạn chót (9 lần).
+        #expect(overdue.count == 23)
+        #expect(overdue.allSatisfy { $0.kind == .overdue && $0.requiresSound })
+        #expect(overdue.prefix(4).map(\.date) == [vn(2026, 10, 28, 21, 5), vn(2026, 10, 28, 21, 10), vn(2026, 10, 28, 21, 15), vn(2026, 10, 28, 21, 30)])
+        #expect(overdue.last?.date == vn(2026, 10, 29, 9))
+        #expect(planner.currentDose(now: vn(2026, 10, 29, 8)).deadlineAt == deadline)
     }
 
     @Test func undoWithinWindowOnly() {
@@ -146,7 +176,7 @@ import Testing
         #expect(dates == dates.sorted())
         #expect(Set(dates).count == dates.count)
         #expect(dates.allSatisfy { $0 > now && $0 <= now.addingTimeInterval(14 * 24 * hour) })
-        #expect(events.filter(\.requiresSound).count == 14)
+        #expect(events.filter { $0.kind == .deadline }.count == 14)
     }
 }
 
@@ -166,7 +196,8 @@ import Testing
         let late = planner.currentDose(now: vn(2026, 10, 29, 0, 31))
         #expect(late.dueAt == vn(2026, 10, 29, 23, 30))
         #expect(late.deadlineAt == vn(2026, 10, 30, 0, 30))
-        #expect(planner.missedCount(now: vn(2026, 10, 29, 0, 31)) == 1)
+        #expect(planner.missedCount(now: vn(2026, 10, 29, 0, 31)) == 0)
+        #expect(planner.lateCount(now: vn(2026, 10, 29, 0, 31)) == 1)
     }
 
     @Test func mainTime0015() {
@@ -201,7 +232,8 @@ import Testing
         #expect(planner.timeline(now: vn(2026, 10, 31, 12)).map(\.status) == [.taken, .paused])
 
         // Hết dừng mà không uống thì bắt đầu tính hụt lại.
-        #expect(planner.missedCount(now: vn(2026, 10, 31, 22)) == 1)
+        #expect(planner.missedCount(now: vn(2026, 10, 31, 22)) == 0)
+        #expect(planner.missedCount(now: vn(2026, 11, 1, 10)) == 1)
     }
 
     @Test func resumeEarlyStartsFromMainTime() {

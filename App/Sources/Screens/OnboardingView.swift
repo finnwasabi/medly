@@ -1,7 +1,14 @@
+import AlarmKit
 import SwiftUI
+import UserNotifications
 
 // Màn đầu tiên khi mở app: giải thích vì sao cần quyền báo thức rồi xin quyền.
 struct OnboardingView: View {
+    var onFinish: () -> Void
+
+    @Environment(AppModel.self) private var model
+    @State private var asking = false
+
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
@@ -27,9 +34,19 @@ struct OnboardingView: View {
             }
             .card()
             Spacer()
-            Button("Cho phép báo thức") {}
-                .buttonStyle(PrimaryButtonStyle())
-            Text("Bước 1 trên 3")
+            Button("Cho phép báo thức") {
+                asking = true
+                Task {
+                    // Từ chối vẫn cho vào app; màn Hôm nay sẽ báo lỗi hẹn nhắc.
+                    _ = try? await AlarmManager.shared.requestAuthorization()
+                    _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+                    await model.resync()
+                    onFinish()
+                }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(asking)
+            Text("Máy sẽ hỏi hai lần: báo thức và thông báo.")
                 .font(.footnote)
                 .foregroundStyle(Palette.textSecondary)
         }
@@ -51,4 +68,4 @@ struct OnboardingView: View {
     }
 }
 
-#Preview { OnboardingView() }
+#Preview { OnboardingView {}.environment(AppModel.shared) }

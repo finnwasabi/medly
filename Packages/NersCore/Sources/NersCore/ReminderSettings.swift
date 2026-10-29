@@ -44,6 +44,10 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
     public var snoozeInterval: TimeInterval
     /// Thời gian cho phép hoàn tác "Đã uống".
     public var undoWindow: TimeInterval
+    /// Sau hạn chót bao lâu thì một lần chưa uống mới tính hụt. Uống trong khoảng này tính trễ.
+    public var lateWindow: TimeInterval
+    /// Khoảng đầu sau hạn chót nhắc dồn dập theo `finalInterval`, sau đó theo `hourlyInterval`.
+    public var overdueBurst: TimeInterval
     /// Bộ đếm viên, `nil` nghĩa là không đếm.
     public var pills: PillCounter?
     public var refillReminder: RefillReminder
@@ -61,6 +65,8 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         finalInterval: TimeInterval = 15 * 60,
         snoozeInterval: TimeInterval = 10 * 60,
         undoWindow: TimeInterval = 10 * 60,
+        lateWindow: TimeInterval = 12 * 3600,
+        overdueBurst: TimeInterval = 3 * 3600,
         pills: PillCounter? = nil,
         refillReminder: RefillReminder = RefillReminder(),
         pauses: [PausePeriod] = []
@@ -75,6 +81,8 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         self.finalInterval = finalInterval
         self.snoozeInterval = snoozeInterval
         self.undoWindow = undoWindow
+        self.lateWindow = lateWindow
+        self.overdueBurst = overdueBurst
         self.pills = pills
         self.refillReminder = refillReminder
         self.pauses = pauses
@@ -99,6 +107,8 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         finalInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .finalInterval) ?? d.finalInterval
         snoozeInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .snoozeInterval) ?? d.snoozeInterval
         undoWindow = try c.decodeIfPresent(TimeInterval.self, forKey: .undoWindow) ?? d.undoWindow
+        lateWindow = try c.decodeIfPresent(TimeInterval.self, forKey: .lateWindow) ?? d.lateWindow
+        overdueBurst = try c.decodeIfPresent(TimeInterval.self, forKey: .overdueBurst) ?? d.overdueBurst
         pills = try c.decodeIfPresent(PillCounter.self, forKey: .pills)
         refillReminder = try c.decodeIfPresent(RefillReminder.self, forKey: .refillReminder) ?? d.refillReminder
         pauses = try c.decodeIfPresent([PausePeriod].self, forKey: .pauses) ?? d.pauses

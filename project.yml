@@ -11,10 +11,15 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
+packages:
+  NersCore:
+    path: Packages/NersCore
 targets:
   NersDaily:
     type: application
     platform: iOS
+    dependencies:
+      - package: NersCore
     sources:
       - App/Sources
       - App/Resources

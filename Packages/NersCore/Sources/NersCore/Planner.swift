@@ -8,6 +8,8 @@ public struct Dose: Equatable, Sendable {
     public var dueAt: Date
     /// Hạn chót, tại đây báo thức có tiếng.
     public var deadlineAt: Date
+    /// Uống sau hạn chót mà trước mốc này thì tính trễ, quá mốc này mới tính hụt.
+    public var lateUntil: Date
     /// Đúng khi lần này đã bị "về lại giờ gốc" và vượt khoảng tối đa.
     public var exceedsMaxInterval: Bool
     /// Mốc tính hạn chót: lần uống trước, hoặc mốc ảo sau một lần hụt hay tạm dừng.
@@ -16,12 +18,14 @@ public struct Dose: Equatable, Sendable {
 
 public enum ReminderKind: String, Codable, Sendable {
     case main, `repeat`, hourly, final, deadline
+    /// Sau hạn chót, nhắc tiếp có tiếng tới khi uống hoặc hết cửa sổ trễ.
+    case overdue
 }
 
 public struct ReminderEvent: Equatable, Sendable {
     public var date: Date
     public var kind: ReminderKind
-    /// Báo thức có tiếng bất kể chế độ máy. Chỉ đúng ở hạn chót.
+    /// Báo thức có tiếng bất kể chế độ máy. Đúng từ hạn chót trở đi.
     public var requiresSound: Bool
     public var dueAt: Date
     public var deadlineAt: Date
@@ -56,6 +60,9 @@ public struct Planner: Sendable {
 
     public func missedCount(now: Date) -> Int { walk(now: now).missed }
 
+    /// Số lần uống sau hạn chót nhưng còn trong cửa sổ trễ.
+    public func lateCount(now: Date) -> Int { walk(now: now).late }
+
     /// Số lần đã uống kể từ lần nhập hoặc thêm viên gần nhất, không đếm viên thì kể từ đầu.
     public func daysTaken(now: Date) -> Int {
         let since = settings.pills?.countingSince ?? .distantPast
@@ -64,7 +71,7 @@ public struct Planner: Sendable {
 
     public func lastTaken(now: Date) -> DoseRecord? { takes(upTo: now).last }
 
-    /// Lịch sử đầy đủ để hiển thị: lần uống, lần hụt, lần rơi vào tạm dừng.
+    /// Lịch sử đầy đủ để hiển thị: lần uống (đúng hạn hoặc trễ), lần hụt, lần rơi vào tạm dừng.
     public func timeline(now: Date) -> [DoseRecord] { walk(now: now).records }
 
     /// Mốc kêu lại khi bấm hoãn. Không vượt quá hạn chót, hạn chót giữ nguyên.
@@ -168,6 +175,7 @@ public struct Planner: Sendable {
     private struct WalkState {
         var dose: Dose
         var missed = 0
+        var late = 0
         var records: [DoseRecord] = []
         /// Lần đang chờ được tính thẳng từ lần uống cuối, chưa qua hụt hay tạm dừng.
         var followsTake = false
@@ -191,7 +199,14 @@ public struct Planner: Sendable {
         var state = WalkState(dose: doseAfterTake(first), records: [first], followsTake: true)
         for take in taken.dropFirst() {
             advance(&state, before: take.takenAt!)
-            state.records.append(take)
+            if take.takenAt! > state.dose.deadlineAt {
+                var record = take
+                record.status = .late
+                state.records.append(record)
+                state.late += 1
+            } else {
+                state.records.append(take)
+            }
             state.dose = doseAfterTake(take)
             state.followsTake = true
         }
@@ -206,7 +221,7 @@ public struct Planner: Sendable {
                 state.records.append(DoseRecord(scheduledAt: state.dose.dueAt, takenAt: nil, status: .paused))
                 state.dose = doseAfterPause(pause.end)
                 state.followsTake = false
-            } else if state.dose.deadlineAt < t {
+            } else if state.dose.lateUntil < t {
                 state.missed += 1
                 state.records.append(DoseRecord(scheduledAt: state.dose.dueAt, takenAt: nil, status: .missed))
                 state.dose = doseAfterMiss(state.dose)
@@ -218,14 +233,16 @@ public struct Planner: Sendable {
     }
 
     private func overlappingPause(_ dose: Dose, startedBy t: Date) -> PausePeriod? {
-        settings.pauses.first { $0.start <= t && $0.start < $0.end && dose.dueAt < $0.end && dose.deadlineAt >= $0.start }
+        settings.pauses.first { $0.start <= t && $0.start < $0.end && dose.dueAt < $0.end && dose.lateUntil >= $0.start }
     }
 
     private var maxInterval: TimeInterval { max(60, settings.maxInterval) }
+    private var lateWindow: TimeInterval { max(0, settings.lateWindow) }
 
     private func dose(slot: Date, anchor: Date) -> Dose {
         let deadline = anchor.addingTimeInterval(maxInterval)
-        return Dose(slotAt: slot, dueAt: min(slot, deadline), deadlineAt: deadline, exceedsMaxInterval: false, anchor: anchor)
+        return Dose(slotAt: slot, dueAt: min(slot, deadline), deadlineAt: deadline, lateUntil: deadline.addingTimeInterval(lateWindow),
+                    exceedsMaxInterval: false, anchor: anchor)
     }
 
     /// Sau lần uống lúc T: lần kế thuộc giờ chính đầu tiên sau T + 12 giờ, tức lần uống T được tính
@@ -235,7 +252,9 @@ public struct Planner: Sendable {
         let slot = VietnamClock.firstMainTime(after: t.addingTimeInterval(12 * 3600), hour: settings.mainHour, minute: settings.mainMinute)
         guard take.nextAtMainTime else { return dose(slot: slot, anchor: t) }
         let normalDeadline = t.addingTimeInterval(maxInterval)
-        return Dose(slotAt: slot, dueAt: slot, deadlineAt: max(slot, normalDeadline), exceedsMaxInterval: slot > normalDeadline, anchor: t)
+        let deadline = max(slot, normalDeadline)
+        return Dose(slotAt: slot, dueAt: slot, deadlineAt: deadline, lateUntil: deadline.addingTimeInterval(lateWindow),
+                    exceedsMaxInterval: slot > normalDeadline, anchor: t)
     }
 
     /// Sau một lần hụt: mốc ảo là hạn chót vừa qua (giới hạn không trễ hơn giờ chính + 12 giờ để không trôi),
@@ -259,7 +278,7 @@ public struct Planner: Sendable {
 
     private func chain(for dose: Dose) -> [ReminderEvent] {
         func event(_ date: Date, _ kind: ReminderKind) -> ReminderEvent {
-            ReminderEvent(date: date, kind: kind, requiresSound: kind == .deadline, dueAt: dose.dueAt, deadlineAt: dose.deadlineAt)
+            ReminderEvent(date: date, kind: kind, requiresSound: kind == .deadline || kind == .overdue, dueAt: dose.dueAt, deadlineAt: dose.deadlineAt)
         }
         let due = dose.dueAt, deadline = dose.deadlineAt
         var list = [event(due, .main)]
@@ -280,12 +299,28 @@ public struct Planner: Sendable {
             final = final.addingTimeInterval(max(60, settings.finalInterval))
         }
         list.append(event(deadline, .deadline))
-        return list.filter { $0.date >= due && $0.date <= deadline }
+        // Quá hạn chót, tất cả có tiếng: nhắc lại như sau mốc chính, rồi theo nhịp cuối tới hết `overdueBurst`,
+        // rồi theo nhịp giờ tới hết cửa sổ trễ.
+        let burstEnd = deadline.addingTimeInterval(max(0, settings.overdueBurst))
+        var overdue: [Date] = (0..<max(0, settings.repeatCount)).map { deadline.addingTimeInterval(TimeInterval($0 + 1) * repeatStep) }
+        var next = (overdue.last ?? deadline).addingTimeInterval(max(60, settings.finalInterval))
+        while next <= burstEnd {
+            overdue.append(next)
+            next = next.addingTimeInterval(max(60, settings.finalInterval))
+        }
+        next = max(burstEnd, overdue.last ?? deadline).addingTimeInterval(max(60, settings.hourlyInterval))
+        while next <= dose.lateUntil {
+            overdue.append(next)
+            next = next.addingTimeInterval(max(60, settings.hourlyInterval))
+        }
+        let before = list.filter { $0.date >= due && $0.date <= deadline }
+        return before + overdue.filter { $0 <= dose.lateUntil }.map { event($0, .overdue) }
     }
 
     private func priority(_ kind: ReminderKind) -> Int {
         switch kind {
-        case .deadline: 4
+        case .deadline: 5
+        case .overdue: 4
         case .main: 3
         case .repeat: 2
         case .final: 1

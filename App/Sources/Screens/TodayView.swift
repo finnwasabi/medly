@@ -1,30 +1,36 @@
+import NersCore
 import SwiftUI
 
 struct TodayView: View {
-    let state: MockTodayState
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    header
-                    messageCard
-                    doseCard
-                    pillsCard
-                    weekCard
-                    syncFooter
+            // Vẽ lại mỗi phút cho đếm ngược. Dùng giờ thật chứ không dùng `context.date` (mốc đầu phút),
+            // không thì lần vừa bấm "Đã uống" nằm sau `now` và bị bỏ qua.
+            TimelineView(.everyMinute) { _ in
+                let now = Date.now
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        header(now: now)
+                        if let issue = model.issue { issueBanner(issue) }
+                        messageCard
+                        doseCard(now: now)
+                        if let pills = model.planner.settings.pills { pillsCard(pills) }
+                        weekCard
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
             }
             .background(Palette.background)
             .toolbar(.hidden, for: .navigationBar)
         }
     }
 
-    private var header: some View {
+    private func header(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Thứ Năm, 29 tháng 10")
+            Text(TodayText.dayTitle(now))
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(Palette.textSecondary)
             Text("Chào Ner")
@@ -34,6 +40,16 @@ struct TodayView: View {
         .padding(.top, 12)
     }
 
+    private func issueBanner(_ text: String) -> some View {
+        Label(text, systemImage: "exclamationmark.octagon.fill")
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(DoseStatus.missed.foreground)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DoseStatus.missed.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    // Lời nhắn tới từ server ở P7, tạm dùng chữ mẫu.
     private var messageCard: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "heart.fill")
@@ -54,48 +70,67 @@ struct TodayView: View {
     }
 
     @ViewBuilder
-    private var doseCard: some View {
+    private func doseCard(now: Date) -> some View {
+        let planner = model.planner
+        let dose = planner.currentDose(now: now)
+        let last = planner.lastTaken(now: now)
         VStack(alignment: .leading, spacing: 16) {
-            switch state {
-            case .upcoming:
+            if now >= dose.dueAt {
+                StatusPill(status: .late)
+                timeBlock(title: "Đã quá giờ uống", time: TodayText.duration(now.timeIntervalSince(dose.dueAt)), showsVN: false,
+                          local: "giờ uống \(TimeFormatting.vietnamTime(dose.dueAt))")
+                warning(now < dose.deadlineAt
+                    ? "Còn \(TodayText.duration(dose.deadlineAt.timeIntervalSince(now))) tới hạn chót 24 giờ"
+                    : "Đã quá hạn chót \(TodayText.duration(now.timeIntervalSince(dose.deadlineAt))). Xem tờ hướng dẫn thuốc hoặc hỏi bác sĩ, dược sĩ.")
+                takeButton
+            } else if let last, let takenAt = last.takenAt, TodayText.isRecent(takenAt, now: now, undoWindow: planner.settings.undoWindow) {
+                StatusPill(status: .taken)
+                timeBlock(title: "Đã uống lúc", time: TimeFormatting.clockTime(takenAt, in: VietnamClock.timeZone), showsVN: true,
+                          local: TodayText.localLine(takenAt))
+                Text("Lần sau: \(TodayText.relativeDay(dose.dueAt, from: now)) \(TimeFormatting.vietnamTime(dose.dueAt)), hạn chót \(TimeFormatting.clockTime(dose.deadlineAt, in: VietnamClock.timeZone)).")
+                    .font(.callout)
+                    .foregroundStyle(Palette.textSecondary)
+                let undoLeft = planner.settings.undoWindow - now.timeIntervalSince(takenAt)
+                if undoLeft > 0 {
+                    Button("Hoàn tác (còn \(TodayText.duration(undoLeft)))") { Task { await model.undo() } }
+                        .buttonStyle(SecondaryButtonStyle())
+                }
+            } else {
                 StatusPill(status: .upcoming)
-                timeBlock(title: "Hôm nay lúc", time: "21:00", local: "tức 16:00 tại \(Mock.localPlace)")
-                Text("Còn 2 giờ 15 phút")
+                let day = TodayText.relativeDay(dose.dueAt, from: now)
+                timeBlock(title: "\(day.prefix(1).uppercased() + day.dropFirst()) lúc",
+                          time: TimeFormatting.clockTime(dose.dueAt, in: VietnamClock.timeZone), showsVN: true,
+                          local: TodayText.localLine(dose.dueAt))
+                Text("Còn \(TodayText.duration(dose.dueAt.timeIntervalSince(now)))")
                     .font(.headline)
                     .foregroundStyle(Palette.textSecondary)
-                Button("Đã uống") {}
-                    .buttonStyle(PrimaryButtonStyle())
+                takeButton
                 Text("Uống sớm cũng được, lần sau sẽ nhắc sớm theo.")
                     .font(.footnote)
                     .foregroundStyle(Palette.textSecondary)
-            case .taken:
-                StatusPill(status: .taken)
-                timeBlock(title: "Đã uống lúc", time: "20:58", local: "tức 15:58 tại \(Mock.localPlace)")
-                Text("Lần sau: mai 21:00 giờ VN, hạn chót 20:58.")
-                    .font(.callout)
-                    .foregroundStyle(Palette.textSecondary)
-                Button("Hoàn tác (còn 8 phút)") {}
-                    .buttonStyle(SecondaryButtonStyle())
-            case .overdue:
-                StatusPill(status: .late)
-                timeBlock(title: "Đã quá giờ uống", time: "2 giờ 10 phút", local: "giờ uống 21:00 giờ VN")
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                    Text("Còn 50 phút tới hạn chót 24 giờ")
-                }
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(DoseStatus.missed.foreground)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(DoseStatus.missed.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                Button("Đã uống") {}
-                    .buttonStyle(PrimaryButtonStyle())
             }
         }
         .card()
     }
 
-    private func timeBlock(title: String, time: String, local: String) -> some View {
+    private var takeButton: some View {
+        Button("Đã uống") { Task { await model.markTaken() } }
+            .buttonStyle(PrimaryButtonStyle())
+    }
+
+    private func warning(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+            Text(text)
+        }
+        .font(.callout.weight(.semibold))
+        .foregroundStyle(DoseStatus.missed.foreground)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DoseStatus.missed.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func timeBlock(title: String, time: String, showsVN: Bool, local: String?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.callout)
@@ -104,35 +139,37 @@ struct TodayView: View {
                 Text(time)
                     .font(.system(size: 48, weight: .bold))
                     .foregroundStyle(Palette.text)
-                if state != .overdue {
+                if showsVN {
                     Text("giờ VN")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(Palette.textSecondary)
                 }
             }
-            Text(local)
-                .font(.callout)
-                .foregroundStyle(Palette.textSecondary)
+            if let local {
+                Text(local)
+                    .font(.callout)
+                    .foregroundStyle(Palette.textSecondary)
+            }
         }
     }
 
-    private var pillsCard: some View {
+    private func pillsCard(_ pills: PillCounter) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("Số viên", systemImage: "pills.fill")
                     .font(.headline)
                     .foregroundStyle(Palette.text)
                 Spacer()
-                Text("\(Mock.pillsRemaining)/\(Mock.pillsTotal) viên")
+                Text("\(pills.remaining)/\(pills.total) viên")
                     .font(.headline.monospacedDigit())
                     .foregroundStyle(Palette.text)
             }
-            ProgressView(value: Double(Mock.pillsRemaining), total: Double(Mock.pillsTotal))
+            ProgressView(value: Double(pills.remaining), total: Double(max(1, pills.total)))
                 .tint(Palette.primary)
-            if Mock.pillsRemaining <= Mock.refillDaysBefore {
+            if let refill = pills.refillMessage(model.planner.settings.refillReminder) {
                 HStack(spacing: 8) {
                     Image(systemName: "cart.fill")
-                    Text("Còn \(Mock.pillsRemaining) viên, nhớ mua thêm")
+                    Text(refill.prefix(1).uppercased() + refill.dropFirst())
                 }
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(DoseStatus.late.foreground)
@@ -140,12 +177,11 @@ struct TodayView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(DoseStatus.late.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            Button("Thêm viên") {}
-                .buttonStyle(SecondaryButtonStyle())
         }
         .card()
     }
 
+    // 7 ngày qua lấy từ timeline ở P5, tạm dùng dữ liệu mẫu.
     private var weekCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("7 ngày qua")
@@ -168,15 +204,48 @@ struct TodayView: View {
         }
         .card()
     }
+}
 
-    private var syncFooter: some View {
-        Label("Đã đồng bộ lúc 20:59 giờ VN", systemImage: "icloud.and.arrow.up")
-            .font(.footnote)
-            .foregroundStyle(Palette.textSecondary)
-            .frame(maxWidth: .infinity)
+/// Chữ hiển thị trên màn Hôm nay. Ngày và giờ chính luôn theo giờ VN.
+enum TodayText {
+    private static let weekdays = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"]
+
+    static func dayTitle(_ date: Date) -> String {
+        let parts = VietnamClock.calendar.dateComponents([.weekday, .day, .month], from: date)
+        return "\(weekdays[(parts.weekday ?? 1) - 1]), \(parts.day ?? 1) tháng \(parts.month ?? 1)"
+    }
+
+    /// "hôm nay", "mai", hoặc thứ trong tuần, theo ngày VN.
+    static func relativeDay(_ date: Date, from now: Date) -> String {
+        let calendar = VietnamClock.calendar
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 0
+        switch days {
+        case 0: return "hôm nay"
+        case 1: return "mai"
+        default: return dayTitle(date)
+        }
+    }
+
+    /// "2 giờ 10 phút", "45 phút". Làm tròn lên phút để đếm ngược không hiện "0 phút".
+    static func duration(_ seconds: TimeInterval) -> String {
+        let minutes = Int((max(0, seconds) / 60).rounded(.up))
+        let h = minutes / 60, m = minutes % 60
+        if h == 0 { return "\(m) phút" }
+        return m == 0 ? "\(h) giờ" : "\(h) giờ \(m) phút"
+    }
+
+    /// Giờ nơi máy đang ở, ẩn khi máy đang theo giờ VN.
+    static func localLine(_ date: Date) -> String? {
+        let zone = TimeZone.autoupdatingCurrent
+        guard zone.secondsFromGMT(for: date) != VietnamClock.timeZone.secondsFromGMT(for: date) else { return nil }
+        let place = zone.identifier.split(separator: "/").last.map { $0.replacingOccurrences(of: "_", with: " ") } ?? zone.identifier
+        return "tức \(TimeFormatting.clockTime(date, in: zone)) tại \(place)"
+    }
+
+    /// Còn hiện trạng thái "Đã uống": cùng ngày VN, hoặc còn trong thời gian hoàn tác.
+    static func isRecent(_ takenAt: Date, now: Date, undoWindow: TimeInterval) -> Bool {
+        VietnamClock.calendar.isDate(takenAt, inSameDayAs: now) || now.timeIntervalSince(takenAt) <= undoWindow
     }
 }
 
-#Preview("Sắp tới") { TodayView(state: .upcoming) }
-#Preview("Đã uống") { TodayView(state: .taken) }
-#Preview("Quá giờ") { TodayView(state: .overdue) }
+#Preview { TodayView().environment(AppModel.shared) }
