@@ -203,7 +203,7 @@ test('bot commands answer in its chat with HTML, a copy button and a refresh but
   assert.match(last().text, /<code>https:\/\/x\/ners#secret-token<\/code>/);
   assert.deepEqual(last().reply_markup.inline_keyboard[0][0].copy_text, { text: 'https://x/ners#secret-token' });
 
-  await bot.handle('/check@ner_daily_bot');
+  await bot.handle('/check@pillot_bot');
   assert.match(last().text, /Daily pill/);
   assert.equal(last().reply_markup.inline_keyboard[0][0].callback_data, 'refresh');
 
