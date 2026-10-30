@@ -23,7 +23,7 @@ struct NextDoseEntry: TimelineEntry {
         let color: Int
         let icon: String
         let state: State
-        /// The dose time, or when reminders start again while resting.
+        /// The dose time, when it was taken, or when reminders start again while resting.
         let time: Date
     }
 
@@ -48,6 +48,8 @@ struct NextDoseEntry: TimelineEntry {
                 state = now < dose.deadlineAt ? .due : .late
             } else if let taken = planner.lastTaken(now: now)?.takenAt, now.timeIntervalSince(taken) < medication.settings.period / 2 {
                 state = .taken
+                // When it was taken, not the next dose: "Taken 21:00" must not read as a time still to come.
+                time = taken
             } else {
                 state = .upcoming
             }

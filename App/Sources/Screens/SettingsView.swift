@@ -42,8 +42,8 @@ struct SettingsView: View {
                             NeoRow(title: L("Hoãn", "Snooze"), detail: L("mặc định 9 phút như Đồng hồ iPhone", "9 min by default, like the iPhone Clock")) {
                                 NeoStepper(value: $model.snoozeMinutes, range: AppModel.snoozeRange, unit: L("phút", "min"))
                             }
-                            Callout(text: L("Hoãn bao nhiêu lần cũng được, nhưng chỉ bấm Đã uống mới tắt hẳn. Chưa uống thì app nhắc lại 3 lần mỗi 5 phút, rồi mỗi giờ, rồi dồn dập trước hạn chót.",
-                                            "Snooze as often as you like, but only Taken stops it for good. Until then the app repeats 3 times every 5 minutes, then hourly, then faster before the deadline."),
+                            Callout(text: L("Hoãn bao nhiêu lần cũng được, nhưng chỉ bấm Đã uống hoặc Bỏ qua lần này mới tắt hẳn. Chưa uống thì app nhắc lại 3 lần mỗi 5 phút, rồi mỗi giờ, rồi dồn dập trước hạn chót.",
+                                            "Snooze as often as you like, but only Taken or Skip this dose stops it for good. Until then the app repeats 3 times every 5 minutes, then hourly, then faster before the deadline."),
                                     icon: "bell.and.waves.left.and.right.fill", fill: Palette.lavender)
                         }
                     }
