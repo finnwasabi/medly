@@ -49,6 +49,72 @@ struct SlidingPill: View {
     }
 }
 
+/// A short burst of paper bits when a dose is taken. One Canvas draws every piece, and the timeline only runs while a
+/// burst is in the air. With Reduce Motion there is no burst; the haptic still plays.
+struct Confetti: View {
+    /// Bumped once per burst.
+    let trigger: Int
+    @State private var start: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let duration: TimeInterval = 1.5
+    private static let gravity: Double = 950
+
+    private struct Piece {
+        let angle, speed, spin: Double
+        let color: Color
+        let size: CGSize
+    }
+
+    // Fixed scatter from the index, so every burst looks alike and nothing random is drawn per frame.
+    private static let pieces: [Piece] = (0..<48).map { i in
+        let f = Double(i)
+        // Cheap repeatable noise in 0..<1.
+        func noise(_ seed: Double) -> Double { abs(sin(f * 12.9898 + seed) * 43758.5453).truncatingRemainder(dividingBy: 1) }
+        return Piece(angle: -.pi / 2 + (noise(1) - 0.5) * 2.4,
+                     speed: 220 + 620 * noise(7),
+                     spin: (i.isMultiple(of: 2) ? 1 : -1) * (4 + f.truncatingRemainder(dividingBy: 5)),
+                     color: Swatch.colors[i % Swatch.colors.count],
+                     size: i.isMultiple(of: 3) ? CGSize(width: 11, height: 11) : CGSize(width: 8, height: 16))
+    }
+
+    var body: some View {
+        TimelineView(.animation(paused: start == nil)) { context in
+            Canvas { canvas, size in
+                guard let start else { return }
+                let t = context.date.timeIntervalSince(start)
+                guard t >= 0, t < Self.duration else { return }
+                let origin = CGPoint(x: size.width / 2, y: size.height * 0.8)
+                let fade = min(1, (Self.duration - t) / 0.35)
+                for piece in Self.pieces {
+                    let x = origin.x + cos(piece.angle) * piece.speed * t
+                    let y = origin.y + sin(piece.angle) * piece.speed * t + 0.5 * Self.gravity * t * t
+                    var bit = canvas
+                    bit.opacity = fade
+                    bit.translateBy(x: x, y: y)
+                    bit.rotate(by: .radians(piece.spin * t))
+                    let rect = CGRect(origin: CGPoint(x: -piece.size.width / 2, y: -piece.size.height / 2), size: piece.size)
+                    let shape = Path(roundedRect: rect, cornerRadius: 2)
+                    bit.fill(shape, with: .color(piece.color))
+                    bit.stroke(shape, with: .color(Palette.ink), lineWidth: 1.5)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .onChange(of: trigger) {
+            guard !reduceMotion else { return }
+            let burst = Date.now
+            start = burst
+            Task {
+                try? await Task.sleep(for: .seconds(Self.duration))
+                // A newer burst keeps its own clock.
+                if start == burst { start = nil }
+            }
+        }
+    }
+}
+
 /// Motion for small state changes: quick, a touch of spring, never in the way. With Reduce Motion, changes are instant.
 enum Motion {
     static let snappy = Animation.snappy(duration: 0.3, extraBounce: 0.06)

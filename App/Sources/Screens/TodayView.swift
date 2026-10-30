@@ -9,7 +9,6 @@ struct TodayView: View {
     /// The medication whose "skip this dose" waits for confirmation.
     @State private var confirmSkip: Medication?
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Side by side normally, stacked at accessibility text sizes so nothing overflows the screen.
     private var rowLayout: AnyLayout {
@@ -39,8 +38,8 @@ struct TodayView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
-                    // Taking, skipping or undoing a dose reshapes and reorders the cards: animate that, not the minute ticks.
-                    .animation(Motion.snappy(reduceMotion), value: model.medications.map(\.history.count))
+                    // No animation when a dose is taken: the cards reorder and change shape at once, and animating that
+                    // crossfaded the old and new contents on top of each other (0.3.2). The confetti is the feedback.
                 }
             }
             .background(Palette.background)
@@ -53,6 +52,7 @@ struct TodayView: View {
                        "No more reminders for this dose of \(medication.name). It does not count as missed and uses no pill. Next: \(TodayText.relativeDay(next, from: .now)) \(TimeFormatting.vn(next)). Whether to skip is a question for your doctor or pharmacist."))
             }
             .sensoryFeedback(.success, trigger: tapped)
+            .overlay { Confetti(trigger: tapped) }
         }
     }
 

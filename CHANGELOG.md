@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-30
+
+### Added
+- A small burst of confetti when you tap Taken or Took all. Reduce Motion turns it off; the haptic still plays.
+
+### Fixed
+- Taking a dose no longer crossfades the old and new card contents on top of each other on Today.
+
 ## [0.3.3] - 2026-10-30
 
 ### Fixed
@@ -146,7 +154,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/finnwasabi/pillot/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/finnwasabi/pillot/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/finnwasabi/pillot/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/finnwasabi/pillot/compare/v0.3.0...v0.3.1
