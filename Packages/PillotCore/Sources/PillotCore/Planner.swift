@@ -186,15 +186,18 @@ public struct Planner: Sendable {
     /// A day with several records takes the worst status: missed, made up, late, taken, paused.
     public func dayStatuses(now: Date) -> [Date: DoseStatus] { dayStatuses(timeline: timeline(now: now), now: now) }
 
+    /// The Vietnam day (its start) a timeline record belongs to, as the calendar shows it. Each record belongs to its
+    /// nearest dose time, the same rule that picks the next dose after a take. A make-up belongs to the day of the miss it
+    /// covers and a late dose to the day of the dose it was late for, not the day they were taken.
+    public func day(of record: DoseRecord) -> Date {
+        let moment = [.madeUp, .late, .skipped].contains(record.status) ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
+        return VietnamClock.startOfDay(firstSlot(after: moment.addingTimeInterval(-halfPeriod)))
+    }
+
     func dayStatuses(timeline: [DoseRecord], now: Date) -> [Date: DoseStatus] {
         var result: [Date: DoseStatus] = [:]
         for record in timeline {
-            // Each record belongs to its nearest main time, the same rule that picks the next dose after a take.
-            // A make-up belongs to the day of the miss it covers and a late dose to the day of the dose it was late for,
-            // not the day they were taken.
-            let moment = [.madeUp, .late, .skipped].contains(record.status) ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
-            let slot = firstSlot(after: moment.addingTimeInterval(-halfPeriod))
-            let day = VietnamClock.startOfDay(slot)
+            let day = day(of: record)
             if let existing = result[day], existing.severity >= record.status.severity { continue }
             result[day] = record.status
         }
@@ -312,7 +315,8 @@ public struct Planner: Sendable {
         return record
     }
 
-    /// Deletes a history record (for a mistaken make-up) and gives the pill back if one was taken.
+    /// Deletes a history record (a mistaken take, make-up or skip) and gives the pill back if one was taken. A deleted take
+    /// brings its dose back: still pending if there is time, missed if not.
     public mutating func removeRecord(id: UUID) {
         guard let index = history.firstIndex(where: { $0.id == id }) else { return }
         if history.remove(at: index).consumedPill { settings.pills?.restore() }

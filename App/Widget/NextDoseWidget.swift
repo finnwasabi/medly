@@ -1,11 +1,14 @@
+import AppIntents
 import PillotCore
 import SwiftUI
 import WidgetKit
 
-/// Home screen and lock screen widget: the next doses and where each one stands. Read only; tapping opens the app.
+/// Home screen and lock screen widget: the next doses and where each one stands, with "Taken" on due doses.
+/// Edit Widget picks the medication it shows first (the small and lock screen sizes show only that one); without a
+/// pick it follows the next due dose. The kind stays "NextDose", so widgets placed before 0.4.0 keep working unpicked.
 struct NextDoseWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "NextDose", provider: NextDoseProvider()) { entry in
+        AppIntentConfiguration(kind: "NextDose", intent: SelectMedicationIntent.self, provider: NextDoseProvider()) { entry in
             NextDoseView(entry: entry)
         }
         .configurationDisplayName("Pillot")
@@ -25,6 +28,9 @@ struct NextDoseEntry: TimelineEntry {
         let state: State
         /// The dose time, when it was taken, or when reminders start again while resting.
         let time: Date
+
+        /// Due or late: the widget offers "Taken".
+        var isDue: Bool { state == .due || state == .late }
     }
 
     let date: Date
@@ -34,7 +40,8 @@ struct NextDoseEntry: TimelineEntry {
 
     static var english: Bool { SharedStorage.defaults?.string(forKey: "language") == "en" }
 
-    static func make(_ medications: [Medication]?, at now: Date) -> NextDoseEntry {
+    /// `pinned` comes first when it still exists, then the rest in the usual order.
+    static func make(_ medications: [Medication]?, at now: Date, pinned: UUID? = nil) -> NextDoseEntry {
         guard let medications else { return NextDoseEntry(date: now, items: [], readable: false) }
         let items = medications.map { medication -> Item in
             let summary = medication.planner.summary(now: now)
@@ -58,12 +65,45 @@ struct NextDoseEntry: TimelineEntry {
         }
         // Due and late first, then by time.
         let rank: (State) -> Int = { [.late: 0, .due: 1, .upcoming: 2, .taken: 3, .resting: 4][$0]! }
-        return NextDoseEntry(date: now, items: items.sorted { (rank($0.state), $0.time) < (rank($1.state), $1.time) }, readable: true)
+        let sorted = items.sorted { (rank($0.state), $0.time) < (rank($1.state), $1.time) }
+        let first = sorted.filter { $0.id == pinned }
+        return NextDoseEntry(date: now, items: first + sorted.filter { $0.id != pinned }, readable: true)
     }
 }
 
-struct NextDoseProvider: TimelineProvider {
-    private func load() -> [Medication]? {
+/// A medication as the widget's Edit Widget menu lists it.
+struct MedicationEntity: AppEntity {
+    let id: UUID
+    let name: String
+
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Medication"
+    static let defaultQuery = MedicationQuery()
+    var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
+}
+
+/// Reads the medications from the App Group, like the widget itself.
+struct MedicationQuery: EntityQuery {
+    func entities(for identifiers: [UUID]) async throws -> [MedicationEntity] {
+        all().filter { identifiers.contains($0.id) }
+    }
+
+    func suggestedEntities() async throws -> [MedicationEntity] { all() }
+
+    private func all() -> [MedicationEntity] {
+        (NextDoseProvider.load() ?? []).map { MedicationEntity(id: $0.id, name: $0.name) }
+    }
+}
+
+struct SelectMedicationIntent: WidgetConfigurationIntent {
+    static let title: LocalizedStringResource = "Medication"
+    static let description = IntentDescription("The medication shown first. Leave it empty to follow the next due dose.")
+
+    @Parameter(title: "Medication")
+    var medication: MedicationEntity?
+}
+
+struct NextDoseProvider: AppIntentTimelineProvider {
+    static func load() -> [Medication]? {
         guard let url = SharedStorage.sharedStateURL, FileManager.default.fileExists(atPath: url.path) else { return nil }
         return try? PlanStore(url: url).load()
     }
@@ -72,15 +112,15 @@ struct NextDoseProvider: TimelineProvider {
         NextDoseEntry(date: .now, items: [.init(id: UUID(), name: "Vitamin D", color: 1, icon: "sun.max.fill", state: .upcoming, time: .now.addingTimeInterval(3600))], readable: true)
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (NextDoseEntry) -> Void) {
-        completion(context.isPreview ? placeholder(in: context) : NextDoseEntry.make(load(), at: .now))
+    func snapshot(for configuration: SelectMedicationIntent, in context: Context) async -> NextDoseEntry {
+        context.isPreview ? placeholder(in: context) : NextDoseEntry.make(Self.load(), at: .now, pinned: configuration.medication?.id)
     }
 
     /// One entry now and one at every dose time and deadline in the next day, so states change on time without the
     /// app. The app also reloads the widget after every change.
-    func getTimeline(in context: Context, completion: @escaping (Timeline<NextDoseEntry>) -> Void) {
+    func timeline(for configuration: SelectMedicationIntent, in context: Context) async -> Timeline<NextDoseEntry> {
         let now = Date.now
-        let medications = load()
+        let medications = Self.load()
         var moments: Set<Date> = []
         for medication in medications ?? [] {
             let dose = medication.planner.currentDose(now: now)
@@ -89,7 +129,8 @@ struct NextDoseProvider: TimelineProvider {
             }
         }
         let entries = [now] + moments.sorted().prefix(20)
-        completion(Timeline(entries: entries.map { NextDoseEntry.make(medications, at: $0) }, policy: .after(now.addingTimeInterval(6 * 3600))))
+        let pinned = configuration.medication?.id
+        return Timeline(entries: entries.map { NextDoseEntry.make(medications, at: $0, pinned: pinned) }, policy: .after(now.addingTimeInterval(6 * 3600)))
     }
 }
 
@@ -146,11 +187,17 @@ struct NextDoseView: View {
                     Text(clock(item.time)).font(.caption.weight(.bold)).minimumScaleFactor(0.6)
                 }
             case .accessoryRectangular:
-                VStack(alignment: .leading, spacing: 1) {
+                let rows = VStack(alignment: .leading, spacing: 1) {
                     ForEach(entry.items.prefix(2)) { item in
                         Text("\(clock(item.time)) · \(item.name)").font(.headline).lineLimit(1)
-                        Text(label(item.state)).font(.caption).lineLimit(1)
+                        Text(item.isDue ? (en ? "Tap when taken" : "Chạm khi đã uống") : label(item.state)).font(.caption).lineLimit(1)
                     }
+                }
+                // On the lock screen the whole widget is the button while the first dose is due.
+                if entry.items[0].isDue {
+                    Button(intent: MarkTakenIntent(ids: [entry.items[0].id])) { rows }.buttonStyle(.plain)
+                } else {
+                    rows
                 }
             case .systemSmall:
                 small(entry.items[0])
@@ -169,7 +216,11 @@ struct NextDoseView: View {
             Spacer(minLength: 0)
             Text(item.name).font(.headline.weight(.heavy)).lineLimit(2)
             Text(clock(item.time)).font(.system(size: 30, weight: .black, design: .rounded)).minimumScaleFactor(0.7)
-            Text(label(item.state)).font(.caption.weight(.heavy))
+            if item.isDue {
+                takenButton(item, title: en ? "Taken" : "Đã uống")
+            } else {
+                Text(label(item.state)).font(.caption.weight(.heavy))
+            }
         }
         .foregroundStyle(WidgetLook.ink)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -186,7 +237,36 @@ struct NextDoseView: View {
             Spacer(minLength: 4)
             Text(label(item.state)).font(.caption.weight(.bold)).foregroundStyle(.secondary)
             Text(clock(item.time)).font(.subheadline.weight(.black).monospacedDigit())
+            if item.isDue { takenButton(item, title: nil) }
         }
         .foregroundStyle(WidgetLook.ink)
+    }
+
+    /// Marks this medication as taken without opening the app. The app saves, reschedules and reloads the widget.
+    private func takenButton(_ item: NextDoseEntry.Item, title: String?) -> some View {
+        Button(intent: MarkTakenIntent(ids: [item.id])) {
+            Label(title ?? (en ? "Taken" : "Đã uống"), systemImage: "checkmark")
+                .labelStyle(TakenLabelStyle(showsTitle: title != nil))
+                .font(.caption.weight(.black))
+                .foregroundStyle(WidgetLook.ink)
+                .padding(.horizontal, title == nil ? 6 : 10)
+                .frame(minHeight: 26)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(WidgetLook.ink, lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(en ? "Taken \(item.name)" : "Đã uống \(item.name)")
+    }
+}
+
+/// Icon only in a list row, icon and title on the small widget.
+private struct TakenLabelStyle: LabelStyle {
+    let showsTitle: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon
+            if showsTitle { configuration.title }
+        }
     }
 }

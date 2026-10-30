@@ -75,6 +75,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.finnwasabi.nersdaily.widget
         TARGETED_DEVICE_FAMILY: "1"
+        # MarkTakenIntent is shared; its work only exists in the app.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) WIDGET"
         GENERATE_INFOPLIST_FILE: NO
 schemes:
   Pillot:
