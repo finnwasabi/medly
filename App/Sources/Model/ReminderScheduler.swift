@@ -156,26 +156,6 @@ nonisolated struct ReminderScheduler: Sendable {
     }
 }
 
-/// The alarm's "Taken" button. Runs in the background without opening the app.
-struct MarkTakenIntent: LiveActivityIntent {
-    static let title: LocalizedStringResource = "Taken"
-    static let isDiscoverable = false
-
-    /// Medication ids separated by commas. Empty for alarms from before medications existed.
-    @Parameter(title: "Medications")
-    var medications: String
-
-    init() { medications = "" }
-
-    init(ids: [UUID]) { medications = ids.map(\.uuidString).joined(separator: ",") }
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        await AppModel.shared.markTaken(medications.split(separator: ",").compactMap { UUID(uuidString: String($0)) })
-        return .result()
-    }
-}
-
 final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         if response.actionIdentifier == ReminderScheduler.takenAction {

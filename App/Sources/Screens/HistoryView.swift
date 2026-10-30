@@ -8,6 +8,12 @@ struct HistoryView: View {
     /// `nil` shows every medication.
     @State private var filter: UUID?
     @State private var editing: Entry?
+    /// A day tapped on the calendar: the list below shows only that day. `nil` shows the latest doses.
+    @State private var selectedDay: Date?
+    /// How many of the latest doses the list shows; "Show more" adds a page.
+    @State private var shownCount = Self.page
+
+    private static let page = 20
 
     /// A history row with the medication it belongs to.
     struct Entry: Identifiable {
@@ -38,8 +44,7 @@ struct HistoryView: View {
                     // Under the calendar: the counts follow the month it shows.
                     summaryCard(summaries.flatMap(\.1.timeline), month: month)
                     entriesCard(summaries.flatMap { med, summary in summary.timeline.map { Entry(medication: med, record: $0) } }
-                        .sorted { moment($0.record) > moment($1.record) }
-                        .prefix(20).map { $0 })
+                        .sorted { moment($0.record) > moment($1.record) })
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
@@ -51,6 +56,8 @@ struct HistoryView: View {
             .onChange(of: model.medications.map(\.id)) { _, ids in
                 if let filter, !ids.contains(filter) { self.filter = nil }
             }
+            .onChange(of: monthOffset) { selectedDay = nil }
+            .onChange(of: filter) { shownCount = Self.page }
         }
     }
 
@@ -157,7 +164,7 @@ struct HistoryView: View {
                 ForEach((0..<leading).map { -100 - $0 }, id: \.self) { _ in Color.clear.frame(height: 40) }
                 ForEach(1...dayCount, id: \.self) { day in
                     let date = calendar.date(byAdding: .day, value: day - 1, to: month)!
-                    dayCell(day: day, status: days[date].map(DoseStatus.init), isToday: date == today)
+                    dayCell(day: day, date: date, status: days[date].map(DoseStatus.init), isToday: date == today)
                 }
             }
             // A 7-column grid has a fixed width budget.
@@ -167,12 +174,14 @@ struct HistoryView: View {
         .card()
     }
 
+    /// A day with records can be tapped to list them below; tapping it again goes back to the latest doses.
     @ViewBuilder
-    private func dayCell(day: Int, status: DoseStatus?, isToday: Bool) -> some View {
+    private func dayCell(day: Int, date: Date, status: DoseStatus?, isToday: Bool) -> some View {
+        let selected = selectedDay == date
         let label = Text("\(day)")
             .font(.callout.weight(.heavy).monospacedDigit())
             .frame(maxWidth: .infinity, minHeight: 40)
-        Group {
+        let cell = Group {
             if let status {
                 label.foregroundStyle(Palette.onFill).neo(status.fill, radius: 10, shadow: 0)
             } else if isToday {
@@ -181,7 +190,16 @@ struct HistoryView: View {
                 label.foregroundStyle(Palette.textSecondary)
             }
         }
+        .overlay { if selected { RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.ink, lineWidth: 4) } }
         .accessibilityLabel(L("Ngày \(day), \(status?.label ?? "chưa có")", "Day \(day), \(status?.label ?? "no record")"))
+        if status != nil {
+            Button { selectedDay = selected ? nil : date } label: { cell }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityHint(L("Xem các lần uống ngày này", "Show this day's doses"))
+        } else {
+            cell
+        }
     }
 
     private var legend: some View {
@@ -209,12 +227,21 @@ struct HistoryView: View {
         return TimeFormatting.vn(takenAt)
     }
 
-    private func entriesCard(_ entries: [Entry]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(L("Gần đây", "Recent"))
-                .font(.headline.weight(.black))
-                .foregroundStyle(Palette.text)
-                .padding(.bottom, 8)
+    /// `all` is every record, newest first; the card shows the selected day or the latest page.
+    private func entriesCard(_ all: [Entry]) -> some View {
+        let entries = selectedDay.map { day in all.filter { $0.medication.planner.day(of: $0.record) == day } } ?? Array(all.prefix(shownCount))
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(selectedDay.map(TodayText.dayTitle) ?? L("Gần đây", "Recent"))
+                    .font(.headline.weight(.black))
+                    .foregroundStyle(Palette.text)
+                Spacer()
+                if selectedDay != nil {
+                    Button(L("Xem gần đây", "Show recent")) { selectedDay = nil }
+                        .buttonStyle(ChipButtonStyle())
+                }
+            }
+            .padding(.bottom, 8)
             if entries.isEmpty {
                 Text(L("Chưa có lần uống nào.", "No doses yet."))
                     .font(.body.weight(.medium))
@@ -254,8 +281,13 @@ struct HistoryView: View {
                 }
                 if entry.id != entries.last?.id { InkDivider() }
             }
+            if selectedDay == nil, all.count > entries.count {
+                Button(L("Xem thêm", "Show more")) { shownCount += Self.page }
+                    .buttonStyle(ChipButtonStyle())
+                    .padding(.top, 10)
+            }
             if !entries.isEmpty {
-                Text(L("Chạm vào một lần uống để sửa giờ.", "Tap a dose to edit its time."))
+                Text(L("Chạm vào một lần uống để sửa giờ hoặc xoá. Chạm vào một ngày trên lịch để xem riêng ngày đó.", "Tap a dose to edit its time or delete it. Tap a day on the calendar to see only that day."))
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(Palette.textSecondary)
                     .padding(.top, 8)
@@ -273,6 +305,23 @@ struct EditTakenTimeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var date = Date.now
     @State private var confirmRemove = false
+
+    private var removeTitle: String {
+        switch record.status {
+        case .skipped: L("Xoá lần bỏ qua này?", "Delete this skip?")
+        case .madeUp: L("Xoá lần uống bù này?", "Delete this make-up?")
+        default: L("Xoá lần uống này?", "Delete this dose?")
+        }
+    }
+
+    private var removeMessage: String {
+        switch record.status {
+        case .skipped: L("Lần đó quay lại như chưa uống: còn trong giờ thì app nhắc tiếp, quá giờ thì tính hụt.", "The dose comes back as not taken: reminded again if there is still time, missed if not.")
+        case .madeUp: L("Lần đó sẽ hiện lại là hụt. Nếu đang đếm viên thì được trả lại một viên.", "That dose shows as missed again. If you count pills, one pill is given back.")
+        default: L("Dùng khi lỡ bấm Đã uống. Lần đó quay lại như chưa uống: còn trong giờ thì app nhắc tiếp, quá giờ thì tính hụt. Nếu đang đếm viên thì được trả lại một viên.",
+                   "For a Taken tapped by mistake. The dose comes back as not taken: reminded again if there is still time, missed if not. If you count pills, one pill is given back.")
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -294,25 +343,21 @@ struct EditTakenTimeSheet: View {
                         .environment(\.timeZone, VietnamClock.timeZone)
                 }
                 .card()
-                if record.status == .madeUp {
-                    Button(L("Xoá lần uống bù", "Delete make-up"), role: .destructive) { confirmRemove = true }
-                        .buttonStyle(NeoButtonStyle(fill: Palette.coral, large: false))
-                }
+                Button(record.status == .madeUp ? L("Xoá lần uống bù", "Delete make-up") : L("Xoá lần uống này", "Delete this dose"), role: .destructive) { confirmRemove = true }
+                    .buttonStyle(NeoButtonStyle(fill: Palette.coral, large: false))
                 }
                 Spacer()
             }
             .padding(16)
             .background(Palette.background)
-            .confirmationDialog(record.status == .skipped ? L("Xoá lần bỏ qua này?", "Delete this skip?") : L("Xoá lần uống bù này?", "Delete this make-up?"),
+            .confirmationDialog(removeTitle,
                                 isPresented: $confirmRemove, titleVisibility: .visible) {
                 Button(L("Xoá", "Delete"), role: .destructive) {
                     model.update(medicationID) { $0.planner.removeRecord(id: record.id) }
                     dismiss()
                 }
             } message: {
-                Text(record.status == .skipped
-                     ? L("Lần đó quay lại như chưa uống: còn trong giờ thì app nhắc tiếp, quá giờ thì tính hụt.", "The dose comes back as not taken: reminded again if there is still time, missed if not.")
-                     : L("Lần đó sẽ hiện lại là hụt. Nếu đang đếm viên thì được trả lại một viên.", "That dose shows as missed again. If you count pills, one pill is given back."))
+                Text(removeMessage)
             }
             .navigationTitle(record.status == .skipped ? L("Lần bỏ qua", "Skipped dose") : L("Sửa giờ uống", "Edit time"))
             .navigationBarTitleDisplayMode(.inline)

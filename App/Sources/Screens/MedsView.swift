@@ -6,6 +6,8 @@ struct MedsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.editMedication) private var editMedication
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Half the cap height of the guide's body text, so a step number sits centred on the first line at any text size.
+    @ScaledMetric(relativeTo: .body) private var halfCapHeight: CGFloat = 6
 
     var body: some View {
         Group {
@@ -20,6 +22,7 @@ struct MedsView: View {
                             .foregroundStyle(Palette.textSecondary)
                     }
                     .padding(.top, 12)
+                    if model.medications.isEmpty { guideCard }
                     ForEach(model.medications) { medication in
                         Button { editMedication(medication) } label: { row(medication) }
                             .buttonStyle(PressableCardStyle())
@@ -47,6 +50,34 @@ struct MedsView: View {
             }
             .background(Palette.background)
         }
+    }
+
+    /// What the tab is for, shown until the first medication is added.
+    private var guideCard: some View {
+        let steps = [
+            ("1", L("Thêm thuốc: tên, màu, biểu tượng và giờ uống theo giờ VN.", "Add a medication: name, color, icon and dose time in Vietnam time.")),
+            ("2", L("Chọn số lần mỗi ngày, ngày nghỉ và số viên nếu muốn đếm.", "Pick doses a day, days off, and a pill count if you want one.")),
+            ("3", L("Tới giờ app kêu như báo thức. Bấm Đã uống là xong.", "At dose time it rings like an alarm. Tap Taken and you are done.")),
+        ]
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(L("Bắt đầu từ đây", "Start here"))
+                .font(.title3.weight(.black))
+            ForEach(steps, id: \.0) { number, text in
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(number)
+                        .font(.headline.weight(.black).monospacedDigit())
+                        .frame(width: 30, height: 30)
+                        .neo(Palette.surfaceOnFill, radius: 8, shadow: 0)
+                        // Centre the box on the middle of the first line's capitals instead of sitting on its baseline.
+                        .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + halfCapHeight }
+                    Text(text)
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .foregroundStyle(Palette.onFill)
+        .card(Palette.lavender)
     }
 
     private func row(_ medication: Medication) -> some View {
@@ -139,6 +170,7 @@ struct MedicationEditor: View {
     @State private var warning: ResetPreview?
     @State private var confirmDelete = false
     @State private var loaded = false
+    @FocusState private var nameFocused: Bool
 
     private var live: Medication? { medication.flatMap { model.medication($0.id) } }
     private var period: Int { 24 / dosesPerDay }
@@ -151,6 +183,7 @@ struct MedicationEditor: View {
                     preview
                     section(L("Tên thuốc", "Name"), footer: L("Tên này hiện trên mọi lần nhắc.", "Shown on every reminder.")) {
                         NeoField(title: L("Ví dụ: Vitamin D", "For example: Vitamin D"), text: $name, limit: Medication.nameLimit)
+                            .focused($nameFocused)
                     }
                     section(L("Màu và biểu tượng", "Color and icon")) { lookPicker }
                     section(L("Lịch uống", "Schedule"), footer: scheduleFooter) { schedule }
@@ -431,6 +464,11 @@ struct MedicationEditor: View {
         loaded = true
         guard let medication else {
             color = model.nextColor
+            // A new medication starts with its name. After the sheet has slid in, or the keyboard fights the animation.
+            Task {
+                try? await Task.sleep(for: .milliseconds(450))
+                nameFocused = true
+            }
             return
         }
         let s = medication.settings

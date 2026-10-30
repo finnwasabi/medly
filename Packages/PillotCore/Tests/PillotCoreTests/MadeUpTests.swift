@@ -119,3 +119,26 @@ import Testing
         #expect(snapshot.madeUpCount == 1)
     }
 }
+
+@Suite struct RemoveTakeTests {
+    /// A "Taken" tapped by mistake can be deleted after the undo window: the pill comes back and so does the dose.
+    @Test func removingAMistakenTakeBringsTheDoseBack() {
+        var planner = Planner(settings: ReminderSettings(mainHour: 21, pills: PillCounter(count: 10, at: vn(2026, 10, 1, 0))))
+        planner.markTaken(at: vn(2026, 10, 1, 21))
+        let mistaken = planner.markTaken(at: vn(2026, 10, 2, 9))
+        let now = vn(2026, 10, 2, 12)
+        #expect(planner.undoLastTaken(now: now) == false)
+        #expect(planner.settings.pills?.remaining == 8)
+        planner.removeRecord(id: mistaken.id)
+        #expect(planner.settings.pills?.remaining == 9)
+        #expect(planner.lastTaken(now: now)?.takenAt == vn(2026, 10, 1, 21))
+        #expect(planner.currentDose(now: now).dueAt == vn(2026, 10, 2, 21))
+    }
+
+    /// A take just after midnight for the evening dose belongs to the evening's day, as the calendar shows it.
+    @Test func dayOfALateNightTake() {
+        let planner = Planner(settings: ReminderSettings(mainHour: 21))
+        let record = DoseRecord(scheduledAt: vn(2026, 10, 2, 21), takenAt: vn(2026, 10, 3, 0, 30), status: .taken)
+        #expect(planner.day(of: record) == vn(2026, 10, 2, 0))
+    }
+}
