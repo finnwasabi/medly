@@ -14,6 +14,8 @@ All notable changes to this project are documented here. The format follows
   list has "Show more" after the first 20.
 - "Taken" right on the widget: on the small and medium widgets for each dose that is due or late, and on the lock screen
   widget, which becomes the button while the first dose is due. It runs in the app, so alarms are rescheduled too.
+- Pick the medication a widget shows: touch and hold the widget, Edit Widget, Medication. The small and lock screen
+  widgets show only that one; the medium widget lists it first. Left empty, it follows the next due dose as before.
 - The Meds tab explains the three steps until the first medication is added, and a new medication starts with the
   cursor in its name.
 
