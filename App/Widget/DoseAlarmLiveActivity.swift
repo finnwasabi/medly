@@ -7,6 +7,7 @@ struct PillotWidgets: WidgetBundle {
     var body: some Widget {
         DoseAlarmLiveActivity()
         NextDoseWidget()
+        NextDoseListWidget()
     }
 }
 

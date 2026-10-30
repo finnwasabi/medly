@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-30
+
+### Changed
+- The medium widget is its own widget without a medication to pick: it lists the next three doses. Picking a medication
+  stays on the small and lock screen widgets. A medium widget placed with 0.4.0 disappears; add it again.
+- "Taken" on the small and medium widgets also shows before dose time, like the button in the app, so it is there
+  whenever the next dose is coming up. The lock screen widget is still a button only once the dose is due.
+
 ## [0.4.0] - 2026-10-30
 
 ### Added
@@ -202,7 +210,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/finnwasabi/pillot/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/finnwasabi/pillot/compare/v0.3.6...v0.4.0
 [0.3.6]: https://github.com/finnwasabi/pillot/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/finnwasabi/pillot/compare/v0.3.4...v0.3.5
