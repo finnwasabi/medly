@@ -3,17 +3,28 @@ import PillotCore
 import SwiftUI
 import WidgetKit
 
-/// Home screen and lock screen widget: the next doses and where each one stands, with "Taken" on due doses.
-/// Edit Widget picks the medication it shows first (the small and lock screen sizes show only that one); without a
-/// pick it follows the next due dose. The kind stays "NextDose", so widgets placed before 0.4.0 keep working unpicked.
+/// The small and lock screen widgets: one medication. Edit Widget picks which; without a pick it follows the next due
+/// dose. The kind stays "NextDose", so small widgets placed before 0.4.0 keep working unpicked.
 struct NextDoseWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: "NextDose", intent: SelectMedicationIntent.self, provider: NextDoseProvider()) { entry in
             NextDoseView(entry: entry)
         }
         .configurationDisplayName("Pillot")
+        .description(NextDoseEntry.english ? "One medication. Touch and hold, Edit Widget to pick it." : "Một thuốc. Giữ widget, chọn Sửa widget để chọn thuốc.")
+        .supportedFamilies([.systemSmall, .accessoryRectangular, .accessoryInline, .accessoryCircular])
+    }
+}
+
+/// The medium widget lists the next three doses, so it has nothing to pick (0.4.0 gave it the picker too).
+struct NextDoseListWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "NextDoseList", provider: NextDoseListProvider()) { entry in
+            NextDoseView(entry: entry)
+        }
+        .configurationDisplayName("Pillot")
         .description(NextDoseEntry.english ? "Your next doses." : "Các lần uống sắp tới.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryInline, .accessoryCircular])
+        .supportedFamilies([.systemMedium])
     }
 }
 
@@ -29,8 +40,10 @@ struct NextDoseEntry: TimelineEntry {
         /// The dose time, when it was taken, or when reminders start again while resting.
         let time: Date
 
-        /// Due or late: the widget offers "Taken".
+        /// Due or late.
         var isDue: Bool { state == .due || state == .late }
+        /// The home screen widgets offer "Taken" whenever the app does: due, late, or early for the next dose.
+        var canTake: Bool { isDue || state == .upcoming }
     }
 
     let date: Date
@@ -116,11 +129,15 @@ struct NextDoseProvider: AppIntentTimelineProvider {
         context.isPreview ? placeholder(in: context) : NextDoseEntry.make(Self.load(), at: .now, pinned: configuration.medication?.id)
     }
 
-    /// One entry now and one at every dose time and deadline in the next day, so states change on time without the
-    /// app. The app also reloads the widget after every change.
     func timeline(for configuration: SelectMedicationIntent, in context: Context) async -> Timeline<NextDoseEntry> {
+        Self.timeline(pinned: configuration.medication?.id)
+    }
+
+    /// One entry now and one at every dose time and deadline in the next day, so states change on time without the
+    /// app. The app also reloads the widgets after every change.
+    static func timeline(pinned: UUID?) -> Timeline<NextDoseEntry> {
         let now = Date.now
-        let medications = Self.load()
+        let medications = load()
         var moments: Set<Date> = []
         for medication in medications ?? [] {
             let dose = medication.planner.currentDose(now: now)
@@ -129,8 +146,19 @@ struct NextDoseProvider: AppIntentTimelineProvider {
             }
         }
         let entries = [now] + moments.sorted().prefix(20)
-        let pinned = configuration.medication?.id
         return Timeline(entries: entries.map { NextDoseEntry.make(medications, at: $0, pinned: pinned) }, policy: .after(now.addingTimeInterval(6 * 3600)))
+    }
+}
+
+struct NextDoseListProvider: TimelineProvider {
+    func placeholder(in context: Context) -> NextDoseEntry { NextDoseProvider().placeholder(in: context) }
+
+    func getSnapshot(in context: Context, completion: @escaping (NextDoseEntry) -> Void) {
+        completion(context.isPreview ? placeholder(in: context) : NextDoseEntry.make(NextDoseProvider.load(), at: .now))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<NextDoseEntry>) -> Void) {
+        completion(NextDoseProvider.timeline(pinned: nil))
     }
 }
 
@@ -219,7 +247,11 @@ struct NextDoseView: View {
             if item.isDue {
                 takenButton(item, title: en ? "Taken" : "Đã uống")
             } else {
-                Text(label(item.state)).font(.caption.weight(.heavy))
+                HStack {
+                    Text(label(item.state)).font(.caption.weight(.heavy))
+                    Spacer(minLength: 4)
+                    if item.canTake { takenButton(item, title: nil) }
+                }
             }
         }
         .foregroundStyle(WidgetLook.ink)
@@ -237,7 +269,7 @@ struct NextDoseView: View {
             Spacer(minLength: 4)
             Text(label(item.state)).font(.caption.weight(.bold)).foregroundStyle(.secondary)
             Text(clock(item.time)).font(.subheadline.weight(.black).monospacedDigit())
-            if item.isDue { takenButton(item, title: nil) }
+            if item.canTake { takenButton(item, title: nil) }
         }
         .foregroundStyle(WidgetLook.ink)
     }
