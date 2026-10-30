@@ -65,7 +65,7 @@ import Testing
         planner.markTaken(at: vn(2026, 10, 1, 21))
         planner.changeSchedule(hour: 9, minute: 0, dosesPerDay: 2, now: vn(2026, 10, 1, 21, 30))
         #expect(planner.settings.maxInterval == 12 * hour)
-        #expect(planner.settings.maxIntervalRange == (12 * hour)...(18 * hour))
+        #expect(planner.settings.maxIntervalRange == (12 * hour)...(24 * hour))
         #expect(planner.currentDose(now: vn(2026, 10, 1, 21, 30)).dueAt == vn(2026, 10, 2, 9))
         // An unknown count is ignored.
         planner.changeSchedule(hour: 9, minute: 0, dosesPerDay: 5, now: vn(2026, 10, 1, 22))

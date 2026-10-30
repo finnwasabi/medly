@@ -112,7 +112,7 @@ public enum AlertPlanner {
     }
 
     /// "Vitamin D", "Vitamin D, Iron" or "Vitamin D, Iron +2". Empty names fall back to a generic word.
-    static func names(_ names: [String], language: Language) -> String {
+    public static func names(_ names: [String], language: Language) -> String {
         let named = names.filter { !$0.isEmpty }
         guard !named.isEmpty else { return language == .en ? "your pill" : "thuốc" }
         let shown = named.prefix(2).joined(separator: ", ")

@@ -9,7 +9,7 @@ import Testing
         for _ in 0..<60 {
             var settings = ReminderSettings(mainHour: Int.random(in: 0...23, using: &rng), mainMinute: Int.random(in: 0...59, using: &rng),
                                             dosesPerDay: ReminderSettings.allowedDosesPerDay.randomElement(using: &rng)!)
-            settings.maxInterval = settings.period * [1, 1.25, 1.5].randomElement(using: &rng)!
+            settings.maxInterval = settings.period * [1, 1.25, 1.5, 2].randomElement(using: &rng)!
             if Bool.random(using: &rng) { settings.pills = PillCounter(count: 30, at: vn(2026, 1, 1, 0)) }
             if Bool.random(using: &rng) { settings.cycle = DoseCycle(activeDays: 5, breakDays: 2, startDay: vn(2026, 1, 3, 0)) }
             var planner = Planner(settings: settings)

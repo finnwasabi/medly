@@ -16,6 +16,9 @@ nonisolated struct ReminderScheduler: Sendable {
 
     /// The key each scheduled alarm was made from (`PlannedAlert.key`), so the next pass can leave it alone.
     private static let alarmKeysKey = "alarmKeys"
+    /// Bumped when the alarm's buttons or intents change, so alarms set by an older version are all replaced once.
+    /// 2: Stop snoozes and Taken is the secondary button (0.4.2).
+    private static let buttonsVersion = 2
 
     /// What one pass did, for the Diagnostics section in Settings.
     struct Report: Sendable {
@@ -62,7 +65,7 @@ nonisolated struct ReminderScheduler: Sendable {
             }
         }
         let plannedAlarms = alerts.filter(\.usesAlarm)
-        let alarmKeys = plannedAlarms.map { $0.key(snoozeMinutes: snoozeMinutes, language: language) }
+        let alarmKeys = plannedAlarms.map { "b\(Self.buttonsVersion)|" + $0.key(snoozeMinutes: snoozeMinutes, language: language) }
         let alarmDiff = AlertDiff.diff(scheduled: scheduled, planned: alarmKeys)
         for id in alarmDiff.cancel { try? manager.cancel(id: UUID(uuidString: id)!) }
         let cancelled = Set(alarmDiff.cancel)
@@ -126,25 +129,53 @@ nonisolated struct ReminderScheduler: Sendable {
     }
 
     private static func configuration(for alert: PlannedAlert, snooze: TimeInterval) -> AlarmManager.AlarmConfiguration<DoseAlarmMetadata> {
-        // The only way to stop the alarm is "Taken". Snooze rings again after `snooze`, as often as needed.
-        let presentation = AlarmPresentation(
-            alert: AlarmPresentation.Alert(
-                title: LocalizedStringResource(stringLiteral: alert.title),
-                stopButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L("Đã uống", "Taken")), textColor: .black, systemImageName: "checkmark"),
-                secondaryButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L("Hoãn \(Int(snooze / 60)) phút", "Snooze \(Int(snooze / 60)) min")), textColor: .white, systemImageName: "zzz"),
-                secondaryButtonBehavior: .countdown
-            ),
-            countdown: AlarmPresentation.Countdown(title: LocalizedStringResource(stringLiteral: L("Đang hoãn: \(alert.names)", "Snoozed: \(alert.names)")))
-        )
-        return AlarmManager.AlarmConfiguration(
+        AlarmManager.AlarmConfiguration(
             countdownDuration: Alarm.CountdownDuration(preAlert: nil, postAlert: snooze),
             schedule: .fixed(alert.date),
-            attributes: AlarmAttributes<DoseAlarmMetadata>(
-                presentation: presentation,
-                metadata: DoseAlarmMetadata(language: AppLanguage.current.rawValue, names: alert.names),
-                tintColor: Palette.primary),
-            stopIntent: MarkTakenIntent(ids: alert.medicationIDs)
+            attributes: attributes(title: alert.title, names: alert.names, snooze: snooze),
+            stopIntent: SnoozeIntent(ids: alert.medicationIDs),
+            secondaryIntent: MarkTakenIntent(ids: alert.medicationIDs)
         )
+    }
+
+    /// Stop, and the side button, snooze; only the "Taken" button marks the dose. Since iOS 26.1 the system draws its own
+    /// Stop button and the side button presses it, so a Taken stop button (0.4.1 and before) logged doses on a quick
+    /// press of the side button.
+    private static func attributes(title: String, names: String, snooze: TimeInterval) -> AlarmAttributes<DoseAlarmMetadata> {
+        let taken = AlarmButton(text: LocalizedStringResource(stringLiteral: L("Đã uống", "Taken")), textColor: .black, systemImageName: "checkmark")
+        let alert: AlarmPresentation.Alert
+        if #available(iOS 26.1, *) {
+            alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: title), secondaryButton: taken, secondaryButtonBehavior: .custom)
+        } else {
+            let stop = AlarmButton(text: LocalizedStringResource(stringLiteral: L("Hoãn \(Int(snooze / 60)) phút", "Snooze \(Int(snooze / 60)) min")), textColor: .white, systemImageName: "zzz")
+            alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: title), stopButton: stop, secondaryButton: taken, secondaryButtonBehavior: .custom)
+        }
+        let presentation = AlarmPresentation(
+            alert: alert,
+            countdown: AlarmPresentation.Countdown(title: LocalizedStringResource(stringLiteral: L("Đang hoãn: \(names)", "Snoozed: \(names)")))
+        )
+        return AlarmAttributes<DoseAlarmMetadata>(
+            presentation: presentation,
+            metadata: DoseAlarmMetadata(language: AppLanguage.current.rawValue, names: names),
+            tintColor: Palette.primary)
+    }
+
+    /// Rings again after `snooze` for these medications: a countdown the lock screen shows as "Snoozed", then an alarm with
+    /// the same buttons. It is not a planned alert, so a reschedule keeps it until one of them is taken.
+    func snooze(_ ids: [UUID], names: String, snooze: TimeInterval) async {
+        let id = UUID()
+        let configuration = AlarmManager.AlarmConfiguration(
+            countdownDuration: Alarm.CountdownDuration(preAlert: snooze, postAlert: snooze),
+            attributes: Self.attributes(title: L("Hết giờ hoãn: uống \(names)", "Snooze over: take \(names)"), names: names, snooze: snooze),
+            stopIntent: SnoozeIntent(ids: ids),
+            secondaryIntent: MarkTakenIntent(ids: ids)
+        )
+        guard (try? await AlarmManager.shared.schedule(id: id, configuration: configuration)) != nil else { return }
+        // ponytail: a reschedule running at this moment can write the map back without this entry; the snooze then
+        // counts as an old alarm and any Taken stops it. Serialise through AppModel if that ever matters.
+        var known = UserDefaults.standard.dictionary(forKey: Self.alarmMedicationsKey) as? [String: [String]] ?? [:]
+        known[id.uuidString] = ids.map(\.uuidString)
+        UserDefaults.standard.set(known, forKey: Self.alarmMedicationsKey)
     }
 
     /// A "Taken" button right on the notification, without opening the app.
@@ -153,6 +184,26 @@ nonisolated struct ReminderScheduler: Sendable {
         UNUserNotificationCenter.current().setNotificationCategories([
             UNNotificationCategory(identifier: doseCategory, actions: [taken], intentIdentifiers: []),
         ])
+    }
+}
+
+/// Stop on the alarm, or the side button: snooze. Runs in the background without opening the app.
+struct SnoozeIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Snooze"
+    static let isDiscoverable = false
+
+    /// Medication ids separated by commas.
+    @Parameter(title: "Medications")
+    var medications: String
+
+    init() { medications = "" }
+
+    init(ids: [UUID]) { medications = ids.map(\.uuidString).joined(separator: ",") }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        await AppModel.shared.snooze(medications.split(separator: ",").compactMap { UUID(uuidString: String($0)) })
+        return .result()
     }
 }
 

@@ -275,3 +275,24 @@ test('a passed deadline with no dose reported nudges the partner once', async ()
   await bot.checkDeadlines(Date.parse('2026-10-31T14:30:00Z'));
   assert.equal(calls.length, 2);
 });
+
+test('as needed and finished courses read right and never nudge', async () => {
+  const base = {
+    id: 'a', name: 'Ibuprofen', dosesPerDay: 1, lastTakenAt: '2026-10-30T02:00:00Z', nextDueAt: '4001-01-01T00:00:00Z',
+    deadlineAt: '4001-01-01T00:00:00Z', takenCount: 3, missedCount: 0, lateCount: 0, madeUpCount: 0, skippedCount: 0,
+    pillsTotal: null, pillsRemaining: null, refillReminder: { enabled: false, daysBefore: 7 }, pausedUntil: null,
+    asNeeded: true, courseEnded: false, pillsPerDose: 2, takenToday: 2,
+  };
+  const snapshot = { schemaVersion: 2, name: 'Ner', updatedAt: '2026-10-30T03:00:00Z', medications: [base, { ...base, id: 'b', name: 'Amox', asNeeded: false, courseEnded: true, nextDueAt: '2026-10-29T14:00:00Z', deadlineAt: '2026-10-29T14:00:00Z' }] };
+  assert.equal(validateSnapshot(snapshot), null);
+  const text = statusText(snapshot, Date.parse('2026-10-30T03:00:00Z'));
+  assert.match(text, /as needed · 2 pills each/);
+  assert.match(text, /Taken 2 times today/);
+  assert.match(text, /Course finished/);
+  assert.doesNotMatch(text, /4001/);
+  const said = [];
+  const store = { get: () => ({ snapshot, nudged: {} }), set() {} };
+  const bot = createBot({ token: 't', chatId: '1', store, publicUrl: 'https://x', apiToken: 'k', fetchImpl: async (_url, init) => { said.push(JSON.parse(init.body).text); return { json: async () => ({ ok: true, result: {} }) }; } });
+  await bot.checkDeadlines(Date.parse('2026-10-31T03:00:00Z'));
+  assert.equal(said.length, 0);
+});

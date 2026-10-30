@@ -48,7 +48,7 @@ struct MedsView: View {
                 // A medication added or deleted slides in or out instead of popping.
                 .animation(Motion.snappy(reduceMotion), value: model.medications.map(\.id))
             }
-            .background(Palette.background)
+            .screenBackground()
         }
     }
 
@@ -90,14 +90,18 @@ struct MedsView: View {
                     .lineLimit(3)
                 Text(medication.scheduleSummary)
                     .font(.subheadline.weight(.semibold))
-                Text(L("Cách nhau tối đa \(TodayText.duration(medication.settings.maxInterval))", "At most \(TodayText.duration(medication.settings.maxInterval)) apart"))
+                Text(medication.settings.asNeeded
+                     ? L("Tối đa \(medication.settings.maxPerDay) lần mỗi ngày", "At most \(medication.settings.maxPerDay) a day")
+                     : L("Cách nhau tối đa \(TodayText.duration(medication.settings.maxInterval))", "At most \(TodayText.duration(medication.settings.maxInterval)) apart"))
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(Palette.onFillSecondary)
                 HStack(spacing: 6) {
                     if let pills = medication.settings.pills {
                         tag(L("còn \(pills.remaining) viên", "\(pills.remaining) left"), icon: "pills")
                     }
-                    if medication.settings.pausedUntil(now: now) != nil {
+                    if medication.settings.courseEnded(now: now) {
+                        tag(L("xong liệu trình", "course done"), icon: "flag.checkered")
+                    } else if medication.settings.pausedUntil(now: now) != nil {
                         tag(L("đang tạm dừng", "paused"), icon: "pause.fill")
                     }
                 }
@@ -165,6 +169,13 @@ struct MedicationEditor: View {
     @State private var breakDays = 7
     /// The first day on of the current pack, Vietnam date.
     @State private var cycleStart = Date.now
+    @State private var asNeeded = false
+    @State private var minGapHours = 4
+    @State private var maxPerDay = 4
+    @State private var pillsPerDose = 1
+    @State private var hasEnd = false
+    /// The last day of the course, Vietnam date.
+    @State private var endDay = Date.now.addingTimeInterval(6 * 24 * 3600)
     @State private var refillEnabled = true
     @State private var refillAt = 7
     @State private var warning: ResetPreview?
@@ -186,19 +197,33 @@ struct MedicationEditor: View {
                             .focused($nameFocused)
                     }
                     section(L("Màu và biểu tượng", "Color and icon")) { lookPicker }
-                    section(L("Lịch uống", "Schedule"), footer: scheduleFooter) { schedule }
-                    section(L("Ngày nghỉ", "Days off"), footer: L("Ví dụ vỉ 21 viên nghỉ 7 ngày. Ngày nghỉ không nhắc và không tính hụt.",
-                                                                 "For example 21 days on and 7 off. Nothing rings and nothing counts as missed on days off.")) { cycle }
+                    section(L("Lịch uống", "Schedule"), footer: asNeeded ? asNeededFooter : scheduleFooter) { schedule }
+                    if !asNeeded {
+                        section(L("Ngày nghỉ", "Days off"), footer: L("Ví dụ vỉ 21 viên nghỉ 7 ngày. Ngày nghỉ không nhắc và không tính hụt.",
+                                                                     "For example 21 days on and 7 off. Nothing rings and nothing counts as missed on days off.")) { cycle }
+                        section(L("Liệu trình", "Course"), footer: L("Ví dụ kháng sinh 7 ngày. Sau ngày cuối app thôi nhắc, lịch sử vẫn giữ.",
+                                                                    "For example 7 days of antibiotics. After the last day nothing rings; the history stays.")) { course }
+                    }
                     section(L("Số viên", "Pills"), footer: counting ? nil : L("Tắt đếm thì app chỉ nhắc giờ.", "With counting off, the app only reminds you.")) { pills }
                     if let live { pauseSection(live) }
                     if medication != nil {
                         Button(L("Xoá thuốc này", "Delete this medication"), role: .destructive) { confirmDelete = true }
                             .buttonStyle(NeoButtonStyle(fill: Palette.coral, large: false))
+                            // On the button, not the screen: since iOS 26 the dialog is a popover from the view it is attached to; on the screen it
+                            // opened off to the side, and next to the file and alert presenters it did not open until something redrew the screen.
+                            .confirmationDialog(L("Xoá \(trimmedName)?", "Delete \(trimmedName)?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+                                Button(L("Xoá", "Delete"), role: .destructive) {
+                                    if let medication { model.delete(medication.id) }
+                                    dismiss()
+                                }
+                            } message: {
+                                Text(L("Lịch nhắc và lịch sử của thuốc này sẽ mất, không khôi phục được.", "Its reminders and history are deleted for good."))
+                            }
                     }
                 }
                 .padding(16)
             }
-            .background(Palette.background)
+            .screenBackground()
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(medication == nil ? L("Thêm thuốc", "Add medication") : L("Sửa thuốc", "Edit medication"))
             .navigationBarTitleDisplayMode(.inline)
@@ -226,14 +251,6 @@ struct MedicationEditor: View {
                            "Next dose: \(TodayText.relativeDay(warning.dueAt, from: .now)) \(TimeFormatting.vn(warning.dueAt)). Check the leaflet before stretching the gap."))
                 }
             }
-            .confirmationDialog(L("Xoá \(trimmedName)?", "Delete \(trimmedName)?"), isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button(L("Xoá", "Delete"), role: .destructive) {
-                    if let medication { model.delete(medication.id) }
-                    dismiss()
-                }
-            } message: {
-                Text(L("Lịch nhắc và lịch sử của thuốc này sẽ mất, không khôi phục được.", "Its reminders and history are deleted for good."))
-            }
         }
         .tint(Palette.ink)
         .onAppear(perform: load)
@@ -260,7 +277,8 @@ struct MedicationEditor: View {
     private var draftSummary: String {
         var draft = Medication(name: name)
         let parts = VietnamClock.calendar.dateComponents([.hour, .minute], from: time)
-        draft.settings = ReminderSettings(mainHour: parts.hour ?? 21, mainMinute: parts.minute ?? 0, dosesPerDay: dosesPerDay)
+        draft.settings = ReminderSettings(mainHour: parts.hour ?? 21, mainMinute: parts.minute ?? 0, dosesPerDay: dosesPerDay,
+                                          pillsPerDose: pillsPerDose, asNeeded: asNeeded, minGap: TimeInterval(minGapHours * 3600))
         return draft.scheduleSummary
     }
 
@@ -301,6 +319,51 @@ struct MedicationEditor: View {
 
     private var schedule: some View {
         VStack(alignment: .leading, spacing: 14) {
+            Toggle(L("Uống khi cần, không có lịch", "Only when needed, no schedule"), isOn: $asNeeded)
+                .toggleStyle(NeoToggleStyle())
+            InkDivider()
+            NeoRow(title: L("Mỗi lần uống", "Each dose"), detail: L("số viên trừ đi khi đếm", "pills subtracted when counting")) {
+                NeoStepper(value: $pillsPerDose, range: ReminderSettings.pillsPerDoseRange, unit: L("viên", "pills"))
+            }
+            InkDivider()
+            if asNeeded { asNeededRows } else { timedRows }
+        }
+    }
+
+    /// The warnings a medication taken when needed has instead of a schedule.
+    private var asNeededRows: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            NeoRow(title: L("Cách nhau ít nhất", "At least apart"), detail: L("app nhắc nếu uống sớm hơn", "the app warns when sooner")) {
+                NeoStepper(value: $minGapHours, range: 1...24, unit: L("giờ", "h"))
+            }
+            NeoRow(title: L("Tối đa mỗi ngày", "At most a day")) {
+                NeoStepper(value: $maxPerDay, range: 1...12, unit: L("lần", "times"))
+            }
+        }
+    }
+
+    private var asNeededFooter: String {
+        L("Không có báo thức và không tính hụt. Bấm Đã uống mỗi khi uống; app chỉ nhắc khi chưa đủ \(minGapHours) giờ từ lần trước hoặc đã quá \(maxPerDay) lần trong ngày. Bao nhiêu là đủ: theo tờ hướng dẫn hoặc bác sĩ.",
+          "No alarms and nothing counts as missed. Tap Taken whenever you take it; the app only warns when it has been less than \(minGapHours) h or more than \(maxPerDay) times today. How much is right: the leaflet or your doctor.")
+    }
+
+    private var course: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Toggle(L("Có ngày kết thúc", "Has an end date"), isOn: $hasEnd)
+                .toggleStyle(NeoToggleStyle())
+            if hasEnd {
+                InkDivider()
+                NeoRow(title: L("Ngày uống cuối", "Last day"), detail: L("giờ VN", "VN time")) {
+                    DatePicker("", selection: $endDay, in: Date.now.addingTimeInterval(-30 * 24 * 3600)..., displayedComponents: .date)
+                        .labelsHidden()
+                        .environment(\.timeZone, VietnamClock.timeZone)
+                }
+            }
+        }
+    }
+
+    private var timedRows: some View {
+        VStack(alignment: .leading, spacing: 14) {
             NeoRow(title: dosesPerDay == 1 ? L("Giờ uống", "Dose time") : L("Lần đầu trong ngày", "First dose"), detail: L("giờ VN", "VN time")) {
                 DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
                     .labelsHidden()
@@ -323,8 +386,8 @@ struct MedicationEditor: View {
             }
             InkDivider()
             // The gap cannot be shorter than the time between two doses, or every dose would drift earlier.
-            NeoRow(title: L("Cách nhau tối đa", "Max gap"), detail: L("từ \(period) tới \(period * 3 / 2) giờ", "\(period) to \(period * 3 / 2) h")) {
-                NeoStepper(value: $gapHours, range: period...(period * 3 / 2), unit: L("giờ", "h"))
+            NeoRow(title: L("Cách nhau tối đa", "Max gap"), detail: L("từ \(period) tới \(period * 2) giờ", "\(period) to \(period * 2) h")) {
+                NeoStepper(value: $gapHours, range: period...(period * 2), unit: L("giờ", "h"))
             }
         }
     }
@@ -374,9 +437,13 @@ struct MedicationEditor: View {
         return draft.doseTimes.joined(separator: " · ")
     }
 
+    /// Why the gap stops at the time between two doses, with the way to get a shorter one.
     private var scheduleFooter: String {
-        L("Luôn theo giờ Việt Nam. Quá \(gapHours) giờ mà chưa uống thì báo thức kêu dồn và tính trễ; uống sớm thì lần sau nhắc sớm theo. Ngắn nhất là \(period) giờ, bằng khoảng giữa hai lần uống, vì ngắn hơn thì mỗi lần sẽ bị kéo sớm dần.",
-          "Always Vietnam time. After \(gapHours) h without a dose, the alarms ring harder and the dose counts as late. Taking it early moves the next reminder earlier. The shortest is \(period) h, the time between two doses, since anything shorter would pull every dose a little earlier.")
+        let shorter = ReminderSettings.allowedDosesPerDay.contains(dosesPerDay * 2)
+            ? L(" Muốn nhắc dày hơn, ví dụ mỗi \(period / 2) giờ, thì tăng số lần mỗi ngày.", " For closer doses, say every \(period / 2) h, raise the doses a day.")
+            : ""
+        return L("Luôn theo giờ Việt Nam. Quá \(gapHours) giờ mà chưa uống thì báo thức kêu dồn và tính trễ; uống sớm thì lần sau nhắc sớm theo. Ngắn nhất là \(period) giờ, bằng khoảng giữa hai lần uống, vì ngắn hơn thì mỗi lần sẽ kéo lần sau sớm dần.\(shorter)",
+                 "Always Vietnam time. After \(gapHours) h without a dose, the alarms ring harder and the dose counts as late. Taking it early moves the next reminder earlier. The shortest is \(period) h, the time between two doses, since anything shorter would pull every dose a little earlier.\(shorter)")
     }
 
     @ViewBuilder
@@ -493,6 +560,14 @@ struct MedicationEditor: View {
         }
         refillEnabled = s.refillReminder.enabled
         refillAt = s.refillReminder.daysBefore
+        asNeeded = s.asNeeded
+        minGapHours = max(1, Int((s.minGap / 3600).rounded()))
+        maxPerDay = s.maxPerDay
+        pillsPerDose = s.pillsPerDose
+        if let end = s.endDay {
+            hasEnd = true
+            endDay = end
+        }
     }
 
     private func save(confirmed: Bool) {
@@ -500,6 +575,8 @@ struct MedicationEditor: View {
         let hour = parts.hour ?? 21, minute = parts.minute ?? 0
         let now = Date.now
         let refill = RefillReminder(enabled: refillEnabled, daysBefore: refillAt)
+        let cycleValue = cycleOn ? DoseCycle(activeDays: activeDays, breakDays: breakDays, startDay: cycleStart) : nil
+        let endValue = hasEnd ? VietnamClock.startOfDay(endDay) : nil
         func apply(_ medication: inout Medication) {
             medication.name = String(trimmedName.prefix(Medication.nameLimit))
             medication.color = color
@@ -521,11 +598,18 @@ struct MedicationEditor: View {
                 medication.settings.pills?.packSize = packSize
             }
             medication.settings.refillReminder = refill
-            medication.settings.cycle = cycleOn ? DoseCycle(activeDays: activeDays, breakDays: breakDays, startDay: cycleStart) : nil
+            medication.settings.cycle = cycleValue
+            medication.settings.endDay = endValue
+            medication.settings.asNeeded = asNeeded
+            medication.settings.minGap = TimeInterval(minGapHours * 3600)
+            medication.settings.maxPerDay = maxPerDay
+            medication.settings.pillsPerDose = pillsPerDose
         }
         if let live {
             let s = live.settings
             let timing = s.mainHour != hour || s.mainMinute != minute || s.dosesPerDay != dosesPerDay || Int((s.maxInterval / 3600).rounded()) != gapHours
+            // Anything that changes which doses were due also re-reads the past, so the past is frozen first.
+            let reschedules = timing || s.asNeeded != asNeeded || s.cycle != cycleValue || s.endDay != endValue
             if !confirmed && timing {
                 var copy = live
                 apply(&copy)
@@ -535,7 +619,10 @@ struct MedicationEditor: View {
                     return
                 }
             }
-            model.update(live.id, apply)
+            model.update(live.id) { medication in
+                if reschedules, !medication.history.isEmpty { medication.planner.freezeHistory(now: now) }
+                apply(&medication)
+            }
         } else if medication == nil {
             var medication = Medication(name: trimmedName, color: color, icon: icon,
                                         settings: ReminderSettings(mainHour: hour, mainMinute: minute, dosesPerDay: dosesPerDay))

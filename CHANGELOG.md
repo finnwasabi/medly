@@ -5,6 +5,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-31
+
+### Fixed
+- A quick press of the side button on a ringing alarm logged the dose as taken. Since iOS 26.1 the system draws its own
+  Stop button and the side button presses it, and Stop ran "Taken". Stop and the side button now snooze (the lock
+  screen shows the countdown and it rings again), and only the Taken button logs the dose. Alarms set by older
+  versions are replaced on the first launch.
+- The Disconnect and Delete confirmations opened off to the side, and Disconnect only opened after flipping the
+  sharing switch. Each confirmation now opens from its own button.
+- Changing a medication's time, doses a day, gap, days off or end date no longer re-reads its whole history under the
+  new schedule. Before, a month of daily doses turned into a month of misses after switching to twice a day; the past is
+  now frozen as it was.
+- Deleting a skip or a make-up did nothing when pills were not counted (a regression caught by the tests before release).
+- The Settings page could be dragged sideways a little on some phones; it now keeps the screen's width.
+
+### Added
+- Medications taken only when needed: no schedule, no alarms, nothing missed. Today shows how many today, the last one,
+  and warns when it is sooner than the minimum gap or more than the daily maximum you set.
+- Courses with an end date, like 7 days of antibiotics: nothing rings after the last day and Today says the course is done.
+- Several pills per dose: the count goes down and back up by that many.
+- A faint pill pattern behind every screen.
+
+### Changed
+- The maximum gap can go up to twice the time between doses (48 h for a daily dose). It still cannot go below that
+  time, and the editor says to choose more doses a day for a shorter one.
+- The bot shows medications taken when needed, finished courses and pills per dose, and never nudges about them.
+
 ## [0.4.1] - 2026-10-30
 
 ### Changed
@@ -210,7 +237,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/finnwasabi/pillot/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/finnwasabi/pillot/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/finnwasabi/pillot/compare/v0.3.6...v0.4.0
 [0.3.6]: https://github.com/finnwasabi/pillot/compare/v0.3.5...v0.3.6

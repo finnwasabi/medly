@@ -25,7 +25,7 @@ struct ProfileView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 16)
         }
-        .background(Palette.background)
+        .screenBackground()
         .onAppear { focused = true }
     }
 

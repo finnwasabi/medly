@@ -44,8 +44,8 @@ struct SettingsView: View {
                             NeoRow(title: L("Hoãn", "Snooze"), detail: L("mặc định 9 phút như Đồng hồ iPhone", "9 min by default, like the iPhone Clock")) {
                                 NeoStepper(value: $model.snoozeMinutes, range: AppModel.snoozeRange, unit: L("phút", "min"))
                             }
-                            Callout(text: L("Hoãn bao nhiêu lần cũng được, nhưng chỉ bấm Đã uống hoặc Bỏ qua lần này mới tắt hẳn. Chưa uống thì app nhắc lại 3 lần mỗi 5 phút, rồi mỗi giờ, rồi dồn dập trước hạn chót.",
-                                            "Snooze as often as you like, but only Taken or Skip this dose stops it for good. Until then the app repeats 3 times every 5 minutes, then hourly, then faster before the deadline."),
+                            Callout(text: L("Khi báo thức kêu, bấm Dừng hoặc nút nguồn là hoãn, không tính là đã uống. Chỉ nút Đã uống (hoặc Bỏ qua lần này trong app) mới tắt hẳn. Chưa uống thì app nhắc lại 3 lần mỗi 5 phút, rồi mỗi giờ, rồi dồn dập trước hạn chót.",
+                                            "When an alarm rings, Stop or the side button snoozes and never counts as taken. Only Taken (or Skip this dose in the app) stops it for good. Until then the app repeats 3 times every 5 minutes, then hourly, then faster before the deadline."),
                                     icon: "bell.and.waves.left.and.right.fill", fill: Palette.lavender)
                         }
                     }
@@ -91,8 +91,13 @@ struct SettingsView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
+                // Exactly the screen's width: on an iPhone 11 Pro Max the page could be dragged sideways a little (0.4.1),
+                // which means something inside was wider than the screen. Not reproduced in the Simulator, so this pins
+                // the width and turns off the sideways bounce instead of guessing which row it was.
+                .containerRelativeFrame(.horizontal)
             }
-            .background(Palette.background)
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+            .screenBackground()
             .scrollDismissesKeyboard(.interactively)
             .fileExporter(isPresented: Binding(get: { exporting != nil }, set: { if !$0 { exporting = nil } }), document: exporting,
                           contentType: .json, defaultFilename: Backup.fileName(at: .now)) { result in
@@ -123,11 +128,6 @@ struct SettingsView: View {
                 Text(L("Bản sao lưu\(when) có \(backup.medications.count) thuốc. Toàn bộ thuốc và lịch sử hiện tại trên máy sẽ bị thay thế.",
                        "The backup\(when) has \(backup.medications.count) medications. Every medication and all history on this phone is replaced."))
             }
-            .confirmationDialog(L("Gỡ kết nối với \(model.partner)?", "Disconnect from \(model.partner)?"), isPresented: $confirmDisconnect, titleVisibility: .visible) {
-                Button(L("Gỡ kết nối", "Disconnect"), role: .destructive) { model.disconnect() }
-            } message: {
-                Text(L("App ngừng gửi dữ liệu. Muốn nối lại thì dán lại mã kết nối.", "The app stops sending data. Paste the connection code again to reconnect."))
-            }
         }
     }
 
@@ -144,6 +144,13 @@ struct SettingsView: View {
                 if let issue = model.syncIssue { Callout(text: issue, icon: "wifi.exclamationmark") }
                 Button(L("Gỡ kết nối", "Disconnect"), role: .destructive) { confirmDisconnect = true }
                     .buttonStyle(ChipButtonStyle(fill: Palette.coral))
+                    // On the button, not the screen: since iOS 26 the dialog is a popover from the view it is attached to; on the screen it
+                    // opened off to the side, and next to the file and alert presenters it did not open until something redrew the screen.
+                    .confirmationDialog(L("Gỡ kết nối với \(model.partner)?", "Disconnect from \(model.partner)?"), isPresented: $confirmDisconnect, titleVisibility: .visible) {
+                        Button(L("Gỡ kết nối", "Disconnect"), role: .destructive) { model.disconnect() }
+                    } message: {
+                        Text(L("App ngừng gửi dữ liệu. Muốn nối lại thì dán lại mã kết nối.", "The app stops sending data. Paste the connection code again to reconnect."))
+                    }
             } else {
                 NeoField(title: L("Dán mã kết nối", "Paste connection code"), text: $code, limit: 500)
                     .textInputAutocapitalization(.never)

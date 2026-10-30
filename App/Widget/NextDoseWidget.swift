@@ -56,7 +56,9 @@ struct NextDoseEntry: TimelineEntry {
     /// `pinned` comes first when it still exists, then the rest in the usual order.
     static func make(_ medications: [Medication]?, at now: Date, pinned: UUID? = nil) -> NextDoseEntry {
         guard let medications else { return NextDoseEntry(date: now, items: [], readable: false) }
-        let items = medications.map { medication -> Item in
+        // Taken-when-needed and finished medications have no next dose to show.
+        let scheduled = medications.filter { !$0.settings.asNeeded && !$0.settings.courseEnded(now: now) }
+        let items = scheduled.map { medication -> Item in
             let summary = medication.planner.summary(now: now)
             let dose = summary.dose
             let state: State
