@@ -1,11 +1,16 @@
-import NersCore
+import MedlyCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var confirmDisconnect = false
     @State private var code = ""
     @State private var badCode = false
+    @State private var exporting: BackupDocument?
+    @State private var importing = false
+    @State private var pendingRestore: Backup?
+    @State private var backupIssue: String?
 
     var body: some View {
         @Bindable var model = model
@@ -37,14 +42,19 @@ struct SettingsView: View {
                             NeoRow(title: L("Hoãn", "Snooze"), detail: L("mặc định 9 phút như Đồng hồ iPhone", "9 min by default, like the iPhone Clock")) {
                                 NeoStepper(value: $model.snoozeMinutes, range: AppModel.snoozeRange, unit: L("phút", "min"))
                             }
-                            Callout(text: L("Hoãn bao nhiêu lần cũng được, nhưng chỉ bấm Đã uống mới tắt hẳn. Chưa uống thì app nhắc lại 3 lần mỗi 5 phút, rồi mỗi giờ, rồi dồn dập trước hạn chót.",
-                                            "Snooze as often as you like, but only Taken stops it for good. Until then the app repeats 3 times every 5 minutes, then hourly, then faster before the deadline."),
+                            Callout(text: L("Hoãn bao nhiêu lần cũng được, nhưng chỉ bấm Đã uống hoặc Bỏ qua lần này mới tắt hẳn. Chưa uống thì app nhắc lại 3 lần mỗi 5 phút, rồi mỗi giờ, rồi dồn dập trước hạn chót.",
+                                            "Snooze as often as you like, but only Taken or Skip this dose stops it for good. Until then the app repeats 3 times every 5 minutes, then hourly, then faster before the deadline."),
                                     icon: "bell.and.waves.left.and.right.fill", fill: Palette.lavender)
                         }
                     }
 
                     section(L("Theo dõi cùng", "Shared tracking"), footer: L("Khi có mạng, app gửi trạng thái mới nhất để \(model.partner) xem qua Telegram. Không có mạng thì vẫn nhắc bình thường. Mã kết nối lấy bằng lệnh /link của bot.", "When online, the app sends the latest status so \(model.partner) can follow it on Telegram. Offline, reminders work as usual. Get the connection code with the bot's /link command.")) {
                         sharing
+                    }
+
+                    section(L("Sao lưu", "Backup"), footer: L("Dữ liệu chỉ nằm trên máy này. Lưu file sao lưu vào iCloud Drive, Google Drive hay gửi cho chính mình, để đổi máy hay cài lại vẫn còn lịch sử. Mã kết nối không nằm trong file.",
+                                                             "Your data lives only on this phone. Save the backup to iCloud Drive, Google Drive or send it to yourself, so a new phone or a reinstall keeps your history. The connection code is not in the file.")) {
+                        backup
                     }
 
                     section(L("Ứng dụng", "App")) {
@@ -69,6 +79,35 @@ struct SettingsView: View {
             }
             .background(Palette.background)
             .scrollDismissesKeyboard(.interactively)
+            .fileExporter(isPresented: Binding(get: { exporting != nil }, set: { if !$0 { exporting = nil } }), document: exporting,
+                          contentType: .json, defaultFilename: Backup.fileName(at: .now)) { result in
+                switch result {
+                case .success: model.backupSaved()
+                case .failure(let error): backupIssue = L("Không lưu được: \(error.localizedDescription)", "Could not save: \(error.localizedDescription)")
+                }
+            }
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
+                do {
+                    let url = try result.get()
+                    let access = url.startAccessingSecurityScopedResource()
+                    defer { if access { url.stopAccessingSecurityScopedResource() } }
+                    pendingRestore = try Backup.read(Data(contentsOf: url))
+                    backupIssue = nil
+                } catch Backup.Failure.tooNew {
+                    backupIssue = L("File này do bản Medly mới hơn tạo. Cập nhật app rồi thử lại.", "This file is from a newer Medly. Update the app and try again.")
+                } catch {
+                    backupIssue = L("Không đọc được file này. Chọn file sao lưu của Medly (.json).", "Could not read this file. Pick a Medly backup (.json).")
+                }
+            }
+            .alert(L("Khôi phục bản sao lưu?", "Restore this backup?"), isPresented: Binding(get: { pendingRestore != nil }, set: { if !$0 { pendingRestore = nil } }),
+                   presenting: pendingRestore) { backup in
+                Button(L("Thay bằng bản sao lưu", "Replace with the backup"), role: .destructive) { model.restore(backup) }
+                Button(L("Huỷ", "Cancel"), role: .cancel) {}
+            } message: { backup in
+                let when = backup.createdAt == .distantPast ? "" : L(" ngày \(TodayText.dayTitle(backup.createdAt))", " from \(TodayText.dayTitle(backup.createdAt))")
+                Text(L("Bản sao lưu\(when) có \(backup.medications.count) thuốc. Toàn bộ thuốc và lịch sử hiện tại trên máy sẽ bị thay thế.",
+                       "The backup\(when) has \(backup.medications.count) medications. Every medication and all history on this phone is replaced."))
+            }
             .confirmationDialog(L("Gỡ kết nối với \(model.partner)?", "Disconnect from \(model.partner)?"), isPresented: $confirmDisconnect, titleVisibility: .visible) {
                 Button(L("Gỡ kết nối", "Disconnect"), role: .destructive) { model.disconnect() }
             } message: {
@@ -106,6 +145,27 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private var backup: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            NeoRow(title: L("Lần sao lưu gần nhất", "Last backup"),
+                   detail: model.lastBackup.map { "\(TodayText.dayTitle($0)), \(TimeFormatting.vn($0))" } ?? L("chưa có", "never")) { EmptyView() }
+            if !model.medications.isEmpty, (model.lastBackup.map { Date.now.timeIntervalSince($0) > 30 * 24 * 3600 } ?? true) {
+                Callout(text: L("Lâu rồi chưa sao lưu. Lưu một bản để khỏi mất lịch sử.", "No recent backup. Save one so your history is safe."),
+                        icon: "externaldrive.badge.exclamationmark", fill: Palette.yellow)
+            }
+            if let backupIssue { Callout(text: backupIssue, icon: "xmark.octagon.fill") }
+            Button { exporting = BackupDocument(data: (try? model.makeBackup().data()) ?? Data()) } label: {
+                Label(L("Lưu bản sao lưu", "Save a backup"), systemImage: "square.and.arrow.up")
+            }
+            .buttonStyle(NeoButtonStyle(fill: Palette.mint, large: false))
+            Button { importing = true } label: {
+                Label(L("Khôi phục từ file", "Restore from a file"), systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(NeoButtonStyle(fill: Palette.surfaceOnFill, large: false))
+        }
+    }
+
     private func label(_ text: String) -> some View {
         Text(text)
             .font(.body.weight(.semibold))
@@ -130,3 +190,19 @@ struct SettingsView: View {
 }
 
 #Preview { SettingsView().environment(AppModel.shared) }
+
+/// The backup as a file for the system's save panel.
+struct BackupDocument: FileDocument {
+    static let readableContentTypes: [UTType] = [.json]
+    let data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
+}

@@ -1,7 +1,7 @@
-# Ner's Daily specification
+# Medly specification
 
 The reference for the reminder logic and the data contract between the app and the sync service.
-`Packages/NersCore` implements everything below and its tests pin it down.
+`Packages/MedlyCore` implements everything below and its tests pin it down.
 
 ## Fixed Vietnam time
 
@@ -53,6 +53,22 @@ The reference for the reminder logic and the data contract between the app and t
 - Invariant: two consecutive ringing alarms are never further apart than the maximum gap, and after a dose there is
   always a ringing alarm at or before its deadline.
 
+## Skipping, days off, backups
+
+- **Skip this dose** resolves the pending dose without taking it: no miss, no pill, and its alarms stop. The next dose
+  starts fresh at the next dose time after the skip, as if the skipped one had been taken on time, so skipping never
+  makes the next reminder ring harder. A skip can be undone for 10 minutes on Today, or deleted later in History, which
+  brings the dose back as not taken.
+- **Days off in a cycle** (`DoseCycle`: days on, days off, first day on): a dose time that falls on a day off moves to
+  the first dose time of the next day on, which starts fresh like after a pause. Nothing rings and nothing counts as
+  missed meanwhile, and days off show as paused in History. A dose still due on the last day on keeps its late window.
+- **Backup** is a JSON file (`format: "medly-backup"`, `version: 1`) with every medication and its history plus the
+  app preferences. The connection code is left out. Restoring replaces everything on the phone after a confirmation.
+  The app's own data file is accepted too.
+- **Widget and Shortcut:** the data file lives in an App Group so the widget can read it (SideStore renames the group
+  and lists the real name in `ALTAppGroups`). The widget is read only. The "I took my meds" App Shortcut marks every
+  medication due now, in the app's process, which also reschedules the alarms.
+
 ## Statuses
 
 | Status | Meaning | Color |
@@ -62,7 +78,8 @@ The reference for the reminder logic and the data contract between the app and t
 | Late | Taken after the deadline plus tolerance, but within the late window. The next dose counts from it. | Yellow |
 | Missed | No confirmation by the end of the late window. | Red |
 | Made up | A missed dose for which an extra pill was taken later. | Blue |
-| Paused | The dose fell inside a pause. | Grey |
+| Skipped | Skipped on purpose. Not a miss. | Lavender |
+| Paused | The dose fell inside a pause or on a day off. | Grey |
 
 Statuses always come with a label and an icon, never color alone.
 
@@ -100,7 +117,7 @@ newest `updatedAt` and answers older ones with 200 and `"stale": true`. Every re
 ```json
 {
   "schemaVersion": 2,
-  "name": "Ner",
+  "name": "Mai",
   "updatedAt": "2026-10-27T14:03:00Z",
   "medications": [
     {
@@ -126,7 +143,8 @@ newest `updatedAt` and answers older ones with 200 and `"stale": true`. Every re
 - Times are UTC ISO 8601 without fractional seconds. `pillsTotal` and `pillsRemaining` are `null` when not counting.
   `lastTakenAt`, `pausedUntil` and `name` may be `null`. `name` is the user's name from the app, so the bot can use it.
 - `missedCount` counts every miss, including made-up ones. `madeUpCount` counts the made-up ones.
-- At most 30 medications per snapshot.
+- At most 30 medications per snapshot. `skippedCount` was added in 0.3.0 and may be missing. `pausedUntil` also covers
+  days off in a cycle.
 - Version 1 (0.1.x: the fields of one medication at the top level, with `daysTaken` instead of `takenCount` and no `id`,
   `name` or `dosesPerDay`) is still accepted and stored as version 2 with one medication.
 - `GET /v1/snapshot` (same token) returns the latest snapshot as version 2, or 404 when there is none.
@@ -134,8 +152,11 @@ newest `updatedAt` and answers older ones with 200 and `"stale": true`. Every re
 ## Telegram bot
 
 - A dedicated bot that answers a single configured chat ID only.
-- Messages on real changes, per medication: taken, undo, a new late or missed dose, a make-up, a pause, low pills, a
-  medication added or removed.
+- Messages on real changes, per medication: taken, undo, a new late, missed or skipped dose, a make-up, a pause, low
+  pills, a medication added or removed.
+- A nudge when a medication is more than 15 minutes past the `deadlineAt` of the latest snapshot and that snapshot has no
+  dose since `nextDueAt`, unless paused. Once per deadline, worded as "no dose has come in yet" since the phone may be
+  offline. This compares the snapshot's own times; the server still decides nothing about the schedule.
 - A 09:00 Vietnam time report every day with one block per medication: last dose, next dose, taken, late, missed, made
   up, pills left, and the last sync. Snapshots older than 24 hours are flagged as not synced since then.
 - Commands: `/check` (latest status, with a Refresh button), `/msg <text>` (the note shown in the app; without text it

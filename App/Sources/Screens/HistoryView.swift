@@ -1,4 +1,4 @@
-import NersCore
+import MedlyCore
 import SwiftUI
 
 struct HistoryView: View {
@@ -112,7 +112,7 @@ struct HistoryView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func calendarCard(days: [Date: NersCore.DoseStatus], now: Date) -> some View {
+    private func calendarCard(days: [Date: MedlyCore.DoseStatus], now: Date) -> some View {
         let today = calendar.startOfDay(for: now)
         let month = calendar.date(byAdding: .month, value: monthOffset, to: calendar.date(from: calendar.dateComponents([.year, .month], from: now))!)!
         let parts = calendar.dateComponents([.year, .month], from: month)
@@ -173,7 +173,7 @@ struct HistoryView: View {
     private var legend: some View {
         // Wraps to two rows on narrow screens.
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), alignment: .leading)], alignment: .leading, spacing: 8) {
-            ForEach([DoseStatus.taken, .late, .madeUp, .missed, .paused], id: \.self) { status in
+            ForEach([DoseStatus.taken, .late, .madeUp, .missed, .skipped, .paused], id: \.self) { status in
                 HStack(spacing: 6) {
                     RoundedRectangle(cornerRadius: 4).fill(status.fill)
                         .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Palette.ink, lineWidth: 1.5))
@@ -190,6 +190,7 @@ struct HistoryView: View {
 
     private func entryDetail(_ record: DoseRecord) -> String {
         guard let takenAt = record.takenAt else { return L("giờ uống \(TimeFormatting.vn(record.scheduledAt))", "dose time \(TimeFormatting.vn(record.scheduledAt))") }
+        if record.status == .skipped { return L("bỏ qua lúc \(TimeFormatting.vn(takenAt))", "skipped at \(TimeFormatting.vn(takenAt))") }
         if record.status == .madeUp { return L("uống bù lúc \(TimeFormatting.vn(takenAt)), \(TodayText.dayTitle(takenAt))", "made up at \(TimeFormatting.vn(takenAt)), \(TodayText.dayTitle(takenAt))") }
         return TimeFormatting.vn(takenAt)
     }
@@ -262,6 +263,14 @@ struct EditTakenTimeSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
+                if record.status == .skipped {
+                    Text(L("Đã bỏ qua lần uống này. Xoá thì lần đó quay lại như chưa uống.", "This dose was skipped. Deleting the skip brings the dose back as not taken."))
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(Palette.text)
+                        .card()
+                    Button(L("Xoá lần bỏ qua", "Delete skip"), role: .destructive) { confirmRemove = true }
+                        .buttonStyle(NeoButtonStyle(fill: Palette.coral, large: false))
+                } else {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(L("Giờ uống (giờ VN)", "Dose time (VN time)"))
                         .font(.headline.weight(.black))
@@ -275,28 +284,34 @@ struct EditTakenTimeSheet: View {
                     Button(L("Xoá lần uống bù", "Delete make-up"), role: .destructive) { confirmRemove = true }
                         .buttonStyle(NeoButtonStyle(fill: Palette.coral, large: false))
                 }
+                }
                 Spacer()
             }
             .padding(16)
             .background(Palette.background)
-            .confirmationDialog(L("Xoá lần uống bù này?", "Delete this make-up?"), isPresented: $confirmRemove, titleVisibility: .visible) {
+            .confirmationDialog(record.status == .skipped ? L("Xoá lần bỏ qua này?", "Delete this skip?") : L("Xoá lần uống bù này?", "Delete this make-up?"),
+                                isPresented: $confirmRemove, titleVisibility: .visible) {
                 Button(L("Xoá", "Delete"), role: .destructive) {
                     model.update(medicationID) { $0.planner.removeRecord(id: record.id) }
                     dismiss()
                 }
             } message: {
-                Text(L("Lần đó sẽ hiện lại là hụt. Nếu đang đếm viên thì được trả lại một viên.", "That dose shows as missed again. If you count pills, one pill is given back."))
+                Text(record.status == .skipped
+                     ? L("Lần đó quay lại như chưa uống: còn trong giờ thì app nhắc tiếp, quá giờ thì tính hụt.", "The dose comes back as not taken: reminded again if there is still time, missed if not.")
+                     : L("Lần đó sẽ hiện lại là hụt. Nếu đang đếm viên thì được trả lại một viên.", "That dose shows as missed again. If you count pills, one pill is given back."))
             }
-            .navigationTitle(L("Sửa giờ uống", "Edit time"))
+            .navigationTitle(record.status == .skipped ? L("Lần bỏ qua", "Skipped dose") : L("Sửa giờ uống", "Edit time"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L("Huỷ", "Cancel")) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L("Lưu", "Save")) {
-                        model.update(medicationID) { $0.planner.editTakenTime(id: record.id, to: date) }
-                        dismiss()
+                if record.status != .skipped {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(L("Lưu", "Save")) {
+                            model.update(medicationID) { $0.planner.editTakenTime(id: record.id, to: date) }
+                            dismiss()
+                        }
+                        .fontWeight(.heavy)
                     }
-                    .fontWeight(.heavy)
                 }
             }
             .onAppear { date = record.takenAt ?? .now }

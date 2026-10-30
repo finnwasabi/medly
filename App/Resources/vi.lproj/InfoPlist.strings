@@ -1,2 +1,2 @@
 /* Vietnamese system permission prompts. The app's own texts live in code as L("vi", "en"). */
-"NSAlarmKitUsageDescription" = "Ner's Daily cần đặt báo thức để nhắc bạn uống thuốc đúng giờ, kể cả khi máy đang im lặng.";
+"NSAlarmKitUsageDescription" = "Medly cần đặt báo thức để nhắc bạn uống thuốc đúng giờ, kể cả khi máy đang im lặng.";

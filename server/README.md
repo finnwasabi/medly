@@ -23,6 +23,7 @@ by the app and runs a private Telegram bot that answers one chat only. The data 
 - Writes on its own when something worth knowing happens: a dose taken, an undo, a new late or missed dose, a make-up,
   a pause, low pills, a medication added or removed.
 - A 09:00 Vietnam time report every day. Data older than 24 hours is flagged as not synced since then.
+- A nudge when a deadline passes with no dose reported (15 minutes after `deadlineAt`, once per deadline).
 - Sets its command menu and profile descriptions on every start. Accepts snapshots from 0.1.x apps (version 1) too.
 
 ## Run
@@ -35,14 +36,14 @@ API_TOKEN=... PUBLIC_URL=https://example.com/ners node server.js
 With Docker Compose, using the official Node image and mounting the source:
 
 ```yaml
-ners-daily:
+medly:
   image: node:24-alpine
   working_dir: /app
   command: node server.js
   user: "1000:1000"
-  env_file: ./ners-daily/.env
+  env_file: ./medly/.env
   volumes:
-    - ./ners-daily/server.js:/app/server.js:ro
-    - ./ners-daily/data:/app/data
+    - ./medly/server.js:/app/server.js:ro
+    - ./medly/data:/app/data
   restart: unless-stopped
 ```

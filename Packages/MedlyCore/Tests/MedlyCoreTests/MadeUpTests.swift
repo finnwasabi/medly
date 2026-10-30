@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import NersCore
+@testable import MedlyCore
 
 /// Make-ups: missed yesterday, take an extra pill today for yesterday.
 @Suite struct MadeUpTests {

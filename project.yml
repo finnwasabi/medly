@@ -1,4 +1,4 @@
-name: NersDaily
+name: Medly
 options:
   bundleIdPrefix: io.github.finnwasabi
   deploymentTarget:
@@ -12,15 +12,15 @@ settings:
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
 packages:
-  NersCore:
-    path: Packages/NersCore
+  MedlyCore:
+    path: Packages/MedlyCore
 targets:
-  NersDaily:
+  Medly:
     type: application
     platform: iOS
     dependencies:
-      - package: NersCore
-      - target: NersDailyWidget
+      - package: MedlyCore
+      - target: MedlyWidget
     sources:
       - App/Sources
       - App/Shared
@@ -28,7 +28,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: "Ner's Daily"
+        CFBundleDisplayName: "Medly"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDevelopmentRegion: en
@@ -36,23 +36,33 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSSupportsLiveActivities: true
-        NSAlarmKitUsageDescription: "Ner's Daily sets alarms to remind you to take your pill on time, even when your phone is on silent."
+        NSAlarmKitUsageDescription: "Medly sets alarms to remind you to take your medication on time, even when your phone is on silent."
+    entitlements:
+      path: App/Medly.entitlements
+      properties:
+        com.apple.security.application-groups: [group.io.github.finnwasabi.nersdaily]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.finnwasabi.nersdaily
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-  NersDailyWidget:
+  MedlyWidget:
     type: app-extension
     platform: iOS
+    dependencies:
+      - package: MedlyCore
+    entitlements:
+      path: App/Widget/MedlyWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.io.github.finnwasabi.nersdaily]
     sources:
       - App/Widget
       - App/Shared
     info:
       path: App/Widget/Info.plist
       properties:
-        CFBundleDisplayName: "Ner's Daily"
+        CFBundleDisplayName: "Medly"
         CFBundleDevelopmentRegion: en
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
@@ -64,7 +74,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
 schemes:
-  NersDaily:
+  Medly:
     build:
       targets:
-        NersDaily: all
+        Medly: all

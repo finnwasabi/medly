@@ -11,15 +11,19 @@ public enum DoseStatus: String, Codable, Sendable {
     case paused
     /// A make-up for a missed dose. Stored in history but ignored by the schedule.
     case madeUp
+    /// Skipped on purpose ("skip this dose"). Stored in history: never counted as missed, uses no pill, and the next
+    /// dose starts fresh at the next dose time.
+    case skipped
 }
 
 extension DoseStatus {
-    /// How bad a status is when several share a day: missed, made up, late, taken, paused.
+    /// How bad a status is when several share a day: missed, made up, late, skipped, taken, paused.
     public var severity: Int {
         switch self {
-        case .missed: 4
-        case .madeUp: 3
-        case .late: 2
+        case .missed: 5
+        case .madeUp: 4
+        case .late: 3
+        case .skipped: 2
         case .taken: 1
         case .paused: 0
         }

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import NersCore
+@testable import MedlyCore
 
 /// Several doses a day, and several medications sharing alerts.
 @Suite struct MultiDoseTests {
