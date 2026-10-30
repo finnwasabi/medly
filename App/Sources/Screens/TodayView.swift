@@ -4,7 +4,12 @@ import SwiftUI
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.editMedication) private var editMedication
-    @State private var confirmRealign: (id: UUID, preview: ResetPreview)?
+    @State private var confirmRealign: RealignRequest?
+
+    private struct RealignRequest {
+        let id: UUID
+        let preview: ResetPreview
+    }
     @State private var tapped = 0
     /// The medication whose "skip this dose" waits for confirmation.
     @State private var confirmSkip: Medication?
@@ -21,6 +26,8 @@ struct TodayView: View {
             // otherwise a dose taken a moment ago lies after `now` and is ignored.
             TimelineView(.everyMinute) { _ in
                 let now = Date.now
+                // One walk over each history per redraw; every card, the sort and the week strip read from these.
+                let summaries = Dictionary(uniqueKeysWithValues: model.medications.map { ($0.id, $0.planner.summary(now: now)) })
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         header(now: now)
@@ -29,11 +36,11 @@ struct TodayView: View {
                         if model.medications.isEmpty {
                             emptyCard
                         } else {
-                            let missed = model.medications.flatMap { med in med.planner.outstandingMissed(now: now).map { (med, $0) } }
+                            let missed = model.medications.flatMap { med in summaries[med.id]!.outstandingMissed().map { (med, $0) } }
                             if !missed.isEmpty { missedCard(missed) }
-                            dueAllButton(now: now)
-                            ForEach(sorted(now: now)) { medication in doseCard(medication, now: now) }
-                            weekCard(now: now)
+                            dueAllButton(now: now, summaries: summaries)
+                            ForEach(sorted(summaries)) { medication in doseCard(medication, summaries[medication.id]!, now: now) }
+                            weekCard(now: now, summaries: summaries)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -51,17 +58,34 @@ struct TodayView: View {
                 Text(L("\(medication.name) thôi nhắc lần này, không tính là hụt và không trừ viên. Lần tới: \(TodayText.relativeDay(next, from: .now)) \(TimeFormatting.vn(next)). Có nên bỏ hay không: hỏi bác sĩ, dược sĩ.",
                        "No more reminders for this dose of \(medication.name). It does not count as missed and uses no pill. Next: \(TodayText.relativeDay(next, from: .now)) \(TimeFormatting.vn(next)). Whether to skip is a question for your doctor or pharmacist."))
             }
+            // Here and not on the card's button: a card is rebuilt every minute by the timeline and moves when the cards reorder.
+            .alert(L("Về lại giờ chính?", "Back to the usual time?"), isPresented: Binding(get: { confirmRealign != nil }, set: { if !$0 { confirmRealign = nil } }),
+                   presenting: confirmRealign) { request in
+                let main = TimeFormatting.clockTime(request.preview.dueAt, in: VietnamClock.timeZone)
+                Button(L("Về lại \(main)", "Move to \(main)"), role: request.preview.exceedsMaxInterval ? .destructive : nil) {
+                    model.update(request.id) { $0.planner.resetToMainTime(now: .now) }
+                }
+                Button(L("Giữ như cũ", "Keep it"), role: .cancel) {}
+            } message: { request in
+                let main = TimeFormatting.clockTime(request.preview.dueAt, in: VietnamClock.timeZone)
+                let gap = TodayText.duration(model.medication(request.id)?.settings.maxInterval ?? 0)
+                Text(request.preview.exceedsMaxInterval
+                     ? L("Lần tới sẽ cách lần trước quá \(gap). Xem tờ hướng dẫn thuốc trước khi giãn khoảng cách.",
+                         "The next dose will be more than \(gap) after the last one. Check the leaflet before stretching the gap.")
+                     : L("Lần tới sẽ về lại \(main) giờ VN.", "The next dose moves back to \(main) VN time."))
+            }
             .sensoryFeedback(.success, trigger: tapped)
             .overlay { Confetti(trigger: tapped) }
         }
     }
 
     /// Due first, then by the next reminder; paused ones last.
-    private func sorted(now: Date) -> [Medication] {
+    private func sorted(_ summaries: [UUID: PlannerSummary]) -> [Medication] {
         model.medications.sorted { a, b in
-            let pa = a.planner.restingUntil(now: now) != nil, pb = b.planner.restingUntil(now: now) != nil
+            let sa = summaries[a.id]!, sb = summaries[b.id]!
+            let pa = sa.restingUntil != nil, pb = sb.restingUntil != nil
             if pa != pb { return pb }
-            return a.planner.currentDose(now: now).dueAt < b.planner.currentDose(now: now).dueAt
+            return sa.dose.dueAt < sb.dose.dueAt
         }
     }
 
@@ -119,8 +143,8 @@ struct TodayView: View {
 
     /// One tap for every medication due right now.
     @ViewBuilder
-    private func dueAllButton(now: Date) -> some View {
-        let due = model.medications.filter { $0.settings.pausedUntil(now: now) == nil && now >= $0.planner.currentDose(now: now).dueAt }
+    private func dueAllButton(now: Date, summaries: [UUID: PlannerSummary]) -> some View {
+        let due = model.medications.filter { $0.settings.pausedUntil(now: now) == nil && now >= summaries[$0.id]!.dose.dueAt }
         if due.count > 1 {
             Button(L("Đã uống cả \(due.count) thuốc", "Took all \(due.count)")) {
                 tapped += 1
@@ -131,10 +155,9 @@ struct TodayView: View {
     }
 
     @ViewBuilder
-    private func doseCard(_ medication: Medication, now: Date) -> some View {
-        let planner = medication.planner
-        let dose = planner.currentDose(now: now)
-        let last = planner.lastTaken(now: now)
+    private func doseCard(_ medication: Medication, _ summary: PlannerSummary, now: Date) -> some View {
+        let dose = summary.dose
+        let last = summary.lastTaken
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 IconBadge(icon: medication.icon, fill: Palette.surfaceOnFill, size: 42)
@@ -165,12 +188,12 @@ struct TodayView: View {
                     icon: "exclamationmark.triangle.fill", fill: now < dose.deadlineAt ? Palette.surfaceOnFill : Palette.coral)
                 takeButton(medication)
                 skipButton(medication)
-            } else if let until = medication.planner.cycleBreakUntil(now: now) {
+            } else if let until = summary.cycleBreakUntil {
                 StatusPill(status: .paused)
                 Text(L("Hôm nay là ngày nghỉ theo chu kỳ. Uống lại từ \(TodayText.relativeDay(until, from: now)), lúc \(TimeFormatting.vn(dose.dueAt)).",
                        "A day off in the cycle. Doses start again \(TodayText.relativeDay(until, from: now)) at \(TimeFormatting.vn(dose.dueAt))."))
                     .font(.callout.weight(.semibold))
-            } else if let last, let takenAt = last.takenAt, TodayText.isRecent(takenAt, now: now, settings: medication.settings) {
+            } else if let last, let takenAt = last.takenAt, medication.settings.showsAsTaken(takenAt, now: now) {
                 StatusPill(status: .taken)
                 timeBlock(title: L("Đã uống lúc", "Taken at"), time: TimeFormatting.clockTime(takenAt, in: VietnamClock.timeZone), showsVN: true,
                           local: TodayText.localLine(takenAt))
@@ -183,7 +206,7 @@ struct TodayView: View {
                         Button(L("Hoàn tác (\(TodayText.duration(undoLeft)))", "Undo (\(TodayText.duration(undoLeft)))")) { Task { await model.undo(medication.id) } }
                             .buttonStyle(ChipButtonStyle(fill: Palette.surfaceOnFill))
                     }
-                    realignButton(medication, dose: dose, now: now)
+                    realignButton(medication, summary)
                 }
             } else {
                 StatusPill(status: .upcoming)
@@ -194,9 +217,9 @@ struct TodayView: View {
                 Text(L("Còn \(TodayText.duration(dose.dueAt.timeIntervalSince(now)))", "In \(TodayText.duration(dose.dueAt.timeIntervalSince(now)))"))
                     .font(.headline.weight(.heavy))
                     .foregroundStyle(Palette.onFillSecondary)
-                realignButton(medication, dose: dose, now: now)
+                realignButton(medication, summary)
                 takeButton(medication)
-                if let skip = medication.planner.undoableSkip(now: now) {
+                if let skip = summary.undoableSkip {
                     Button(L("Hoàn tác bỏ qua", "Undo skip")) { model.update(medication.id) { $0.planner.removeRecord(id: skip.id) } }
                         .buttonStyle(ChipButtonStyle(fill: Palette.surfaceOnFill))
                 } else {
@@ -258,7 +281,8 @@ struct TodayView: View {
             Text(items.count == 1 ? L("Có 1 lần hụt chưa uống bù", "1 missed dose not made up") : L("Có \(items.count) lần hụt chưa uống bù", "\(items.count) missed doses not made up"))
                 .font(.headline.weight(.black))
                 .foregroundStyle(Palette.text)
-            ForEach(items, id: \.record.id) { medication, record in
+            // Two medications can miss at the same moment, so the id needs both.
+            ForEach(items.map { (key: "\($0.medication.id)\($0.record.id)", medication: $0.medication, record: $0.record) }, id: \.key) { _, medication, record in
                 rowLayout {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(medication.name)
@@ -282,24 +306,11 @@ struct TodayView: View {
 
     /// Shown when an early dose pulled the next reminder before its scheduled time.
     @ViewBuilder
-    private func realignButton(_ medication: Medication, dose: Dose, now: Date) -> some View {
-        if dose.dueAt < dose.slotAt.addingTimeInterval(-60), let preview = medication.planner.resetPreview(now: now) {
+    private func realignButton(_ medication: Medication, _ summary: PlannerSummary) -> some View {
+        if summary.dose.dueAt < summary.dose.slotAt.addingTimeInterval(-60), let preview = summary.resetPreview {
             let main = TimeFormatting.clockTime(preview.dueAt, in: VietnamClock.timeZone)
-            Button(L("Về lại \(main)", "Back to \(main)")) { confirmRealign = (medication.id, preview) }
+            Button(L("Về lại \(main)", "Back to \(main)")) { confirmRealign = RealignRequest(id: medication.id, preview: preview) }
                 .buttonStyle(ChipButtonStyle(fill: Palette.surfaceOnFill))
-                .alert(L("Về lại giờ chính?", "Back to the usual time?"),
-                       isPresented: Binding(get: { confirmRealign?.id == medication.id }, set: { if !$0 { confirmRealign = nil } })) {
-                    Button(L("Về lại \(main)", "Move to \(main)"), role: preview.exceedsMaxInterval ? .destructive : nil) {
-                        model.update(medication.id) { $0.planner.resetToMainTime(now: .now) }
-                        confirmRealign = nil
-                    }
-                    Button(L("Giữ như cũ", "Keep it"), role: .cancel) { confirmRealign = nil }
-                } message: {
-                    Text(preview.exceedsMaxInterval
-                         ? L("Lần tới sẽ cách lần trước quá \(TodayText.duration(medication.settings.maxInterval)). Xem tờ hướng dẫn thuốc trước khi giãn khoảng cách.",
-                             "The next dose will be more than \(TodayText.duration(medication.settings.maxInterval)) after the last one. Check the leaflet before stretching the gap.")
-                         : L("Lần tới sẽ về lại \(main) giờ VN.", "The next dose moves back to \(main) VN time."))
-                }
         }
     }
 
@@ -328,15 +339,15 @@ struct TodayView: View {
         }
     }
 
-    private func weekCard(now: Date) -> some View {
+    private func weekCard(now: Date, summaries: [UUID: PlannerSummary]) -> some View {
         let calendar = VietnamClock.calendar
         let today = calendar.startOfDay(for: now)
-        let statuses = mergedDayStatuses(model.medications.map { $0.planner.dayStatuses(now: now) })
+        let statuses = mergedDayStatuses(model.medications.map { summaries[$0.id]!.dayStatuses() })
         // The only past day that can lack a record is a pending dose that is due or overdue (still in its late
         // window). Any other gap is before the user started, so it shows "no data", not late.
         var dueDays: [Date: DoseStatus] = [:]
         for medication in model.medications {
-            let dose = medication.planner.currentDose(now: now)
+            let dose = summaries[medication.id]!.dose
             guard now >= dose.dueAt, medication.settings.pausedUntil(now: now) == nil else { continue }
             let day = calendar.startOfDay(for: dose.slotAt)
             if now >= dose.deadlineAt || dueDays[day] == nil { dueDays[day] = now >= dose.deadlineAt ? .late : .due }
@@ -449,14 +460,6 @@ enum TodayText {
         let place = zone.identifier.split(separator: "/").last.map { $0.replacingOccurrences(of: "_", with: " ") } ?? zone.identifier
         let time = TimeFormatting.clockTime(date, in: zone)
         return L("tức \(time) tại \(place)", "that is \(time) in \(place)")
-    }
-
-    /// Keep showing "Taken" for half the time to the next dose, or while it can still be undone. A daily dose also
-    /// stays "Taken" for the rest of its Vietnam day, so a morning dose is not offered again in the evening.
-    static func isRecent(_ takenAt: Date, now: Date, settings: ReminderSettings) -> Bool {
-        let elapsed = now.timeIntervalSince(takenAt)
-        if elapsed < settings.period / 2 || elapsed <= settings.undoWindow { return true }
-        return settings.dosesPerDay == 1 && VietnamClock.calendar.isDate(takenAt, inSameDayAs: now)
     }
 }
 

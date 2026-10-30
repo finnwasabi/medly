@@ -14,11 +14,21 @@ nonisolated struct ReminderScheduler: Sendable {
     /// Which medications each scheduled alarm is for. AlarmKit does not hand the metadata back, so it lives here.
     private static let alarmMedicationsKey = "alarmMedications"
 
-    /// Returns how many alerts could not be scheduled.
+    /// What one pass scheduled, for the Diagnostics section in Settings: AlarmKit does not run in the Simulator, so this
+    /// is the only way to see the real numbers on a phone.
+    struct Report: Sendable {
+        /// Alarms the app holds after the pass, ringing or snoozed ones included.
+        var alarms = 0
+        var notifications = 0
+        var failures = 0
+        /// The latest alert that was scheduled: reminders stop after this unless the app runs again.
+        var lastAlert: Date?
+    }
+
     /// `cancelActiveFor`: alarms of these medications that are ringing or snoozed are stopped too. Others keep ringing,
     /// so taking one medication never silences another one's reminder.
-    func apply(_ alerts: [PlannedAlert], cancelActiveFor taken: Set<UUID>, snooze: TimeInterval) async -> Int {
-        var failures = 0
+    func apply(_ alerts: [PlannedAlert], cancelActiveFor taken: Set<UUID>, snooze: TimeInterval) async -> Report {
+        var report = Report()
         // Notification button titles follow the selected language.
         Self.registerCategory()
         let manager = AlarmManager.shared
@@ -42,11 +52,13 @@ nonisolated struct ReminderScheduler: Sendable {
             do {
                 _ = try await manager.schedule(id: id, configuration: Self.configuration(for: alert, snooze: snooze))
                 kept[id.uuidString] = alert.medicationIDs.map(\.uuidString)
+                report.lastAlert = max(report.lastAlert ?? alert.date, alert.date)
             } catch {
-                failures += 1
+                report.failures += 1
             }
         }
         defaults.set(kept, forKey: Self.alarmMedicationsKey)
+        report.alarms = kept.count
 
         let center = UNUserNotificationCenter.current()
         center.removeAllPendingNotificationRequests()
@@ -69,11 +81,13 @@ nonisolated struct ReminderScheduler: Sendable {
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
             do {
                 try await center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger))
+                report.notifications += 1
+                report.lastAlert = max(report.lastAlert ?? alert.date, alert.date)
             } catch {
-                failures += 1
+                report.failures += 1
             }
         }
-        return failures
+        return report
     }
 
     private static func configuration(for alert: PlannedAlert, snooze: TimeInterval) -> AlarmManager.AlarmConfiguration<DoseAlarmMetadata> {

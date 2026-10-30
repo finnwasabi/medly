@@ -47,7 +47,7 @@ public struct DoseCycle: Codable, Equatable, Sendable {
     /// Days since 1970 in Vietnam time. Plain arithmetic: Vietnam is UTC+7 with no daylight saving, and this runs for
     /// every planned reminder, where a Calendar call per date made planning twenty times slower.
     static func vietnamDay(_ date: Date) -> Int {
-        Int(((date.timeIntervalSince1970 + 7 * 3600) / 86_400).rounded(.down))
+        Int(((date.timeIntervalSince1970 + VietnamClock.offset) / VietnamClock.day).rounded(.down))
     }
 
     /// The start of the next day on, if `date` is on a day off.
@@ -143,6 +143,15 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
 
     /// The range the maximum gap may be set to: from one period up to one and a half.
     public var maxIntervalRange: ClosedRange<TimeInterval> { period...(period * 1.5) }
+
+    /// Whether a dose taken at `takenAt` still shows as "Taken" at `now`, on Today and in the widget: for half the time
+    /// to the next dose or while it can be undone. A daily dose also stays "Taken" for the rest of its Vietnam day, so a
+    /// morning dose is not offered again in the evening.
+    public func showsAsTaken(_ takenAt: Date, now: Date) -> Bool {
+        let elapsed = now.timeIntervalSince(takenAt)
+        if elapsed < period / 2 || elapsed <= undoWindow { return true }
+        return dosesPerDay == 1 && DoseCycle.vietnamDay(takenAt) == DoseCycle.vietnamDay(now)
+    }
 
     /// When the pause ends, if `now` is inside one.
     public func pausedUntil(now: Date) -> Date? {

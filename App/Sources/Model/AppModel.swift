@@ -92,9 +92,16 @@ final class AppModel {
             }
             guard snoozeMinutes != oldValue else { return }
             UserDefaults.standard.set(snoozeMinutes, forKey: "snoozeMinutes")
-            Task { await resync() }
+            // Holding the stepper changes this many times a second; reschedule once it settles.
+            snoozeResync?.cancel()
+            snoozeResync = Task {
+                try? await Task.sleep(for: .milliseconds(800))
+                guard !Task.isCancelled else { return }
+                await resync()
+            }
         }
     }
+    @ObservationIgnored private var snoozeResync: Task<Void, Never>?
 
     // MARK: Shared tracking
 
@@ -292,6 +299,15 @@ final class AppModel {
 
     // MARK: Rescheduling
 
+    /// The latest scheduling pass, shown under Diagnostics in Settings.
+    private(set) var scheduleReport: ScheduleReport?
+
+    struct ScheduleReport {
+        var result: ReminderScheduler.Report
+        var at: Date
+        var duration: Duration
+    }
+
     private var syncing = false
     private var syncAgain = false
     private var cancelPending: Set<UUID> = []
@@ -317,7 +333,10 @@ final class AppModel {
                 alarmsAvailable: alarmsAvailable,
                 language: language
             )
-            let failures = await scheduler.apply(alerts, cancelActiveFor: cancel, snooze: TimeInterval(snoozeMinutes * 60))
+            let started = ContinuousClock.now
+            let result = await scheduler.apply(alerts, cancelActiveFor: cancel, snooze: TimeInterval(snoozeMinutes * 60))
+            scheduleReport = ScheduleReport(result: result, at: now, duration: ContinuousClock.now - started)
+            let failures = result.failures
             // Screenshot launches (`-screen`) run in the Simulator, which always denies alarms.
             if medications.isEmpty || UserDefaults.standard.string(forKey: "screen") != nil {
                 scheduleIssue = nil

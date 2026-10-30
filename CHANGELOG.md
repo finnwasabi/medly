@@ -5,6 +5,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-10-30
+
+### Changed
+- Today, History and the widget stay fast as history grows. Planning used to slow down with the square of the number
+  of records (one year of a 6-a-day dose took 7 ms per query on a Mac, three years 34 ms); it is now linear and each
+  screen walks every history once per redraw instead of about ten times. Measured on a Mac with four medications, the
+  planning work of one Today redraw went from 93 ms to 2 ms after one year of data, and from 608 ms to 6 ms after three.
+- The History counts follow the month shown in the calendar, and sit under it.
+- Holding the snooze stepper reschedules once after you let go instead of on every step.
+- Settings has a Diagnostics section: alarm permission, how many alarms and notifications are set, the last reminder
+  they reach, how long the last scheduling took, and whether the widget can read the data.
+
+### Fixed
+- "Taken" in History no longer drops to 0 when you add a pack of pills.
+- The widget showed "Next" in the evening for a daily dose taken that morning, while the app showed "Taken". Both use one rule now.
+- Missed doses kept getting a new identity every minute, and two medications missed at the same moment could share
+  one row.
+- The "Back to the usual time" question is presented by the Today screen, not by a card that redraws every minute.
+
 ## [0.3.4] - 2026-10-30
 
 ### Added
@@ -154,7 +173,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/finnwasabi/pillot/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/finnwasabi/pillot/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/finnwasabi/pillot/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/finnwasabi/pillot/compare/v0.3.1...v0.3.2
