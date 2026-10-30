@@ -1,4 +1,5 @@
 import AlarmKit
+import BackgroundTasks
 import SwiftUI
 import UserNotifications
 
@@ -31,6 +32,11 @@ struct PillotApp: App {
         .onChange(of: scenePhase) { _, phase in
             // Opening the app refills the reminders for the next H days.
             if phase == .active { Task { await model.resync() } }
+            if phase == .background { AppModel.scheduleRefresh() }
+        }
+        // iOS decides when, if ever; Diagnostics in Settings shows the last run.
+        .backgroundTask(.appRefresh(AppModel.refreshTask)) {
+            await AppModel.shared.backgroundRefresh()
         }
     }
 

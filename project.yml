@@ -37,6 +37,9 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSSupportsLiveActivities: true
         NSAlarmKitUsageDescription: "Pillot sets alarms to remind you to take your medication on time, even when your phone is on silent."
+        # Background refresh tops the alarms up when the app is not opened for days.
+        UIBackgroundModes: [fetch]
+        BGTaskSchedulerPermittedIdentifiers: [io.github.finnwasabi.nersdaily.refresh]
     entitlements:
       path: App/Pillot.entitlements
       properties:

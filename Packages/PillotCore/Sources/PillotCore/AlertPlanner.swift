@@ -153,3 +153,30 @@ public enum AlertPlanner {
         }
     }
 }
+
+extension PlannedAlert {
+    /// Everything the phone shows or does with this alert. An alarm or notification already scheduled under the same key
+    /// is left alone, so a change to one medication no longer cancels and reschedules every alert (0.3.5 redid up to 300
+    /// alarms, about 2 seconds, after each change).
+    public func key(snoozeMinutes: Int, language: Language) -> String {
+        let ids = medicationIDs.map(\.uuidString).sorted().joined(separator: ",")
+        return "\(Int(date.timeIntervalSince1970.rounded()))|\(usesAlarm ? "alarm" : "note")|\(ids)|\(snoozeMinutes)|\(language.rawValue)|\(title)|\(body)"
+    }
+}
+
+public enum AlertDiff {
+    /// Matches what is scheduled (id to key) against the planned keys. Returns the ids to cancel and the positions in
+    /// `planned` that still need scheduling. A key scheduled twice keeps one copy.
+    public static func diff(scheduled: [String: String], planned: [String]) -> (cancel: [String], add: [Int]) {
+        var free = Dictionary(grouping: scheduled.keys.sorted(), by: { scheduled[$0]! })
+        var add: [Int] = []
+        for (index, key) in planned.enumerated() {
+            if free[key]?.isEmpty == false {
+                free[key]!.removeFirst()
+            } else {
+                add.append(index)
+            }
+        }
+        return (free.values.flatMap { $0 }.sorted(), add)
+    }
+}

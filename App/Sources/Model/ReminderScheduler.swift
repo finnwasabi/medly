@@ -14,54 +14,82 @@ nonisolated struct ReminderScheduler: Sendable {
     /// Which medications each scheduled alarm is for. AlarmKit does not hand the metadata back, so it lives here.
     private static let alarmMedicationsKey = "alarmMedications"
 
-    /// What one pass scheduled, for the Diagnostics section in Settings: AlarmKit does not run in the Simulator, so this
-    /// is the only way to see the real numbers on a phone.
+    /// The key each scheduled alarm was made from (`PlannedAlert.key`), so the next pass can leave it alone.
+    private static let alarmKeysKey = "alarmKeys"
+
+    /// What one pass did, for the Diagnostics section in Settings.
     struct Report: Sendable {
         /// Alarms the app holds after the pass, ringing or snoozed ones included.
         var alarms = 0
         var notifications = 0
+        /// Alarms and notifications cancelled or added by this pass; the rest stayed as they were.
+        var changed = 0
         var failures = 0
-        /// The latest alert that was scheduled: reminders stop after this unless the app runs again.
+        /// The latest alert that is scheduled: reminders stop after this unless the app runs again.
         var lastAlert: Date?
     }
 
+    /// Brings the scheduled alarms and notifications in line with `alerts`, touching only what differs.
     /// `cancelActiveFor`: alarms of these medications that are ringing or snoozed are stopped too. Others keep ringing,
     /// so taking one medication never silences another one's reminder.
-    func apply(_ alerts: [PlannedAlert], cancelActiveFor taken: Set<UUID>, snooze: TimeInterval) async -> Report {
+    func apply(_ alerts: [PlannedAlert], cancelActiveFor taken: Set<UUID>, snooze: TimeInterval, language: Language) async -> Report {
         var report = Report()
+        let snoozeMinutes = Int(snooze / 60)
         // Notification button titles follow the selected language.
         Self.registerCategory()
         let manager = AlarmManager.shared
         let defaults = UserDefaults.standard
         let known = defaults.dictionary(forKey: Self.alarmMedicationsKey) as? [String: [String]] ?? [:]
+        let knownKeys = defaults.dictionary(forKey: Self.alarmKeysKey) as? [String: String] ?? [:]
         let takenIDs = Set(taken.map(\.uuidString))
         var kept: [String: [String]] = [:]
-        // ponytail: cancel and reschedule everything each time (up to AlertPlanner.alarmLimit); switch to diffing if slow on a device.
+        var keptKeys: [String: String] = [:]
+        var scheduled: [String: String] = [:]
         for alarm in (try? manager.alarms) ?? [] {
-            let meds = known[alarm.id.uuidString]
-            // An active alarm without a record comes from a version before medications; any "Taken" stops it.
+            let id = alarm.id.uuidString
+            let meds = known[id]
+            if alarm.state == .scheduled {
+                // Alarms from before 0.3.6 have no key: they are replaced once.
+                if let key = knownKeys[id] { scheduled[id] = key } else { try? manager.cancel(id: alarm.id) }
+                continue
+            }
+            // Ringing or snoozed. One without a record comes from a version before medications; any "Taken" stops it.
             let belongsToTaken = meds.map { !takenIDs.isDisjoint(with: $0) } ?? !taken.isEmpty
-            if alarm.state == .scheduled || belongsToTaken {
+            if belongsToTaken {
                 try? manager.cancel(id: alarm.id)
             } else if let meds {
-                kept[alarm.id.uuidString] = meds
+                kept[id] = meds
             }
         }
-        for alert in alerts where alert.usesAlarm {
-            let id = UUID()
+        let plannedAlarms = alerts.filter(\.usesAlarm)
+        let alarmKeys = plannedAlarms.map { $0.key(snoozeMinutes: snoozeMinutes, language: language) }
+        let alarmDiff = AlertDiff.diff(scheduled: scheduled, planned: alarmKeys)
+        for id in alarmDiff.cancel { try? manager.cancel(id: UUID(uuidString: id)!) }
+        let cancelled = Set(alarmDiff.cancel)
+        for (id, key) in scheduled where !cancelled.contains(id) {
+            kept[id] = known[id]
+            keptKeys[id] = key
+        }
+        var failed: Set<Int> = []
+        for index in alarmDiff.add {
+            let alert = plannedAlarms[index], id = UUID()
             do {
                 _ = try await manager.schedule(id: id, configuration: Self.configuration(for: alert, snooze: snooze))
                 kept[id.uuidString] = alert.medicationIDs.map(\.uuidString)
-                report.lastAlert = max(report.lastAlert ?? alert.date, alert.date)
+                keptKeys[id.uuidString] = alarmKeys[index]
             } catch {
+                failed.insert(index)
                 report.failures += 1
             }
         }
         defaults.set(kept, forKey: Self.alarmMedicationsKey)
+        defaults.set(keptKeys, forKey: Self.alarmKeysKey)
         report.alarms = kept.count
+        report.changed = alarmDiff.cancel.count + alarmDiff.add.count
+        report.lastAlert = plannedAlarms.indices.filter { !failed.contains($0) }.map { plannedAlarms[$0].date }.max()
 
+        // Notifications use the key as their identifier, so the pending list itself says what is already scheduled.
         let center = UNUserNotificationCenter.current()
-        center.removeAllPendingNotificationRequests()
         if !taken.isEmpty {
             let delivered = await center.deliveredNotifications().filter { note in
                 let meds = note.request.content.userInfo[Self.medicationsKey] as? [String] ?? []
@@ -69,24 +97,31 @@ nonisolated struct ReminderScheduler: Sendable {
             }
             center.removeDeliveredNotifications(withIdentifiers: delivered.map(\.request.identifier))
         }
-        for alert in alerts where !alert.usesAlarm {
-            let interval = alert.date.timeIntervalSinceNow
-            guard interval >= 1 else { continue }
+        let notes = alerts.filter { !$0.usesAlarm && $0.date.timeIntervalSinceNow >= 1 }
+        let noteKeys = notes.map { $0.key(snoozeMinutes: snoozeMinutes, language: language) }
+        let pending = await center.pendingNotificationRequests().map(\.identifier)
+        let noteDiff = AlertDiff.diff(scheduled: Dictionary(uniqueKeysWithValues: pending.map { ($0, $0) }), planned: noteKeys)
+        center.removePendingNotificationRequests(withIdentifiers: noteDiff.cancel)
+        report.notifications = pending.count - noteDiff.cancel.count
+        for index in noteDiff.add {
+            let alert = notes[index]
             let content = UNMutableNotificationContent()
             content.title = alert.title
             content.body = alert.body
             content.sound = .default
             content.categoryIdentifier = Self.doseCategory
             content.userInfo = [Self.medicationsKey: alert.medicationIDs.map(\.uuidString)]
-            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+            // Seconds from now: the absolute time is in the key, so a kept request still fires when planned.
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, alert.date.timeIntervalSinceNow), repeats: false)
             do {
-                try await center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger))
+                try await center.add(UNNotificationRequest(identifier: noteKeys[index], content: content, trigger: trigger))
                 report.notifications += 1
-                report.lastAlert = max(report.lastAlert ?? alert.date, alert.date)
             } catch {
                 report.failures += 1
             }
         }
+        report.changed += noteDiff.cancel.count + noteDiff.add.count
+        if let last = notes.last?.date { report.lastAlert = max(report.lastAlert ?? last, last) }
         return report
     }
 
