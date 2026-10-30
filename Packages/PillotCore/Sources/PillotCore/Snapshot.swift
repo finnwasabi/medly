@@ -146,24 +146,23 @@ public struct MedicationSnapshot: Codable, Equatable, Sendable {
 
 extension Medication {
     public func snapshot(now: Date) -> MedicationSnapshot {
-        let planner = planner
-        let dose = planner.currentDose(now: now)
+        let summary = planner.summary(now: now)
         return MedicationSnapshot(
             id: id,
             name: name,
             dosesPerDay: settings.dosesPerDay,
-            lastTakenAt: planner.lastTaken(now: now)?.takenAt,
-            nextDueAt: dose.dueAt,
-            deadlineAt: dose.deadlineAt,
-            takenCount: planner.daysTaken(now: now),
-            missedCount: planner.missedCount(now: now),
-            lateCount: planner.lateCount(now: now),
-            madeUpCount: planner.madeUpCount(now: now),
-            skippedCount: planner.skippedCount(now: now),
+            lastTakenAt: summary.lastTaken?.takenAt,
+            nextDueAt: summary.dose.dueAt,
+            deadlineAt: summary.dose.deadlineAt,
+            takenCount: summary.daysTaken,
+            missedCount: summary.missedCount,
+            lateCount: summary.lateCount,
+            madeUpCount: summary.madeUpCount,
+            skippedCount: summary.skippedCount,
             pillsTotal: settings.pills?.total,
             pillsRemaining: settings.pills?.remaining,
             refillReminder: settings.refillReminder,
-            pausedUntil: planner.restingUntil(now: now)
+            pausedUntil: summary.restingUntil
         )
     }
 }

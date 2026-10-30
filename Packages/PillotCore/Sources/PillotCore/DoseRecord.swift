@@ -69,3 +69,14 @@ public struct DoseRecord: Codable, Equatable, Identifiable, Sendable {
         self.makesUpFor = makesUpFor
     }
 }
+
+extension DoseRecord {
+    /// A record the planner derives (a miss or a paused slot), never stored. Its id comes from the time and status, so the
+    /// same dose keeps its id across redraws instead of looking like a new row every minute.
+    init(derived scheduledAt: Date, status: DoseStatus) {
+        let bits = String(format: "%016llX", scheduledAt.timeIntervalSinceReferenceDate.bitPattern)
+        let code = status == .missed ? "0001" : "0002"
+        let id = UUID(uuidString: "\(bits.prefix(8))-\(bits.dropFirst(8).prefix(4))-\(bits.suffix(4))-\(code)-000000000000")!
+        self.init(id: id, scheduledAt: scheduledAt, takenAt: nil, status: status)
+    }
+}

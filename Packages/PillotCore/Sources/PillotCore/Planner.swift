@@ -45,6 +45,40 @@ public struct ResetPreview: Equatable, Sendable {
     }
 }
 
+/// Everything the screens show for one medication at `now`, from one walk over the history. Each `Planner` query walks
+/// the whole history on its own, and a redraw of Today asked about ten of them per medication.
+public struct PlannerSummary: Sendable {
+    public let now: Date
+    /// Same as `Planner.currentDose`.
+    public let dose: Dose
+    public let lastTaken: DoseRecord?
+    /// Same as `Planner.timeline`.
+    public let timeline: [DoseRecord]
+    public let missedCount: Int
+    public let lateCount: Int
+    public let skippedCount: Int
+    public let madeUpCount: Int
+    /// Same as `Planner.daysTaken`: since pills were last entered or added.
+    public let daysTaken: Int
+    public let undoableSkip: DoseRecord?
+    public let resetPreview: ResetPreview?
+    public let restingUntil: Date?
+    public let cycleBreakUntil: Date?
+    let planner: Planner
+
+    /// Same as `Planner.outstandingMissed`.
+    public func outstandingMissed(days: Int = 7) -> [DoseRecord] {
+        let since = now.addingTimeInterval(-TimeInterval(days) * VietnamClock.day)
+        return timeline.filter { $0.status == .missed && $0.scheduledAt >= since }.reversed()
+    }
+
+    /// Same as `Planner.dayStatuses`.
+    public func dayStatuses() -> [Date: DoseStatus] { planner.dayStatuses(timeline: timeline, now: now) }
+
+    /// Same as `Planner.events`, without walking the history again.
+    public func events(horizonDays: Int = 14) -> [ReminderEvent] { planner.events(from: dose, now: now, horizonDays: horizonDays) }
+}
+
 /// Computes the schedule from settings and history. Never reads the clock; `now` is always a parameter.
 public struct Planner: Sendable {
     public var settings: ReminderSettings
@@ -60,6 +94,23 @@ public struct Planner: Sendable {
 
     /// The dose pending at `now`.
     public func currentDose(now: Date) -> Dose { walk(now: now).dose }
+
+    /// Every query below at once, from a single walk. Use this when drawing a screen.
+    public func summary(now: Date) -> PlannerSummary {
+        let events = resolutions(upTo: now)
+        let state = walk(events, now: now)
+        let resolved = resolved(state.records, now: now)
+        let lastTake = events.last { $0.status == .taken }
+        let since = settings.pills?.countingSince ?? .distantPast
+        return PlannerSummary(
+            now: now, dose: state.dose, lastTaken: lastTake, timeline: resolved.records,
+            missedCount: state.missed, lateCount: state.late, skippedCount: state.skipped, madeUpCount: resolved.matched,
+            daysTaken: events.count(where: { $0.status == .taken && $0.takenAt! >= since }),
+            undoableSkip: undoableSkip(last: events.last, now: now),
+            resetPreview: resetPreview(state, lastTake: lastTake),
+            restingUntil: restingUntil(now: now), cycleBreakUntil: cycleBreakUntil(now: now),
+            planner: self)
+    }
 
     /// The next reminder time.
     public func nextReminder(now: Date) -> Date { currentDose(now: now).dueAt }
@@ -82,9 +133,10 @@ public struct Planner: Sendable {
     public func skippedCount(now: Date) -> Int { walk(now: now).skipped }
 
     /// The latest skip, while it can still be undone.
-    public func undoableSkip(now: Date) -> DoseRecord? {
-        guard let last = resolutions(upTo: now).last, last.status == .skipped,
-              now.timeIntervalSince(last.takenAt!) <= settings.undoWindow else { return nil }
+    public func undoableSkip(now: Date) -> DoseRecord? { undoableSkip(last: resolutions(upTo: now).last, now: now) }
+
+    private func undoableSkip(last: DoseRecord?, now: Date) -> DoseRecord? {
+        guard let last, last.status == .skipped, now.timeIntervalSince(last.takenAt!) <= settings.undoWindow else { return nil }
         return last
     }
 
@@ -97,10 +149,10 @@ public struct Planner: Sendable {
     }
 
     /// Full history for display: doses (on time or late), misses, make-ups and paused slots.
-    public func timeline(now: Date) -> [DoseRecord] { resolved(now: now).records }
+    public func timeline(now: Date) -> [DoseRecord] { resolved(walk(now: now).records, now: now).records }
 
     /// Misses that were made up. `missedCount` still includes them.
-    public func madeUpCount(now: Date) -> Int { resolved(now: now).matched }
+    public func madeUpCount(now: Date) -> Int { resolved(walk(now: now).records, now: now).matched }
 
     /// Misses not made up within the last `days` days, newest first.
     public func outstandingMissed(now: Date, days: Int = 7) -> [DoseRecord] {
@@ -110,8 +162,8 @@ public struct Planner: Sendable {
 
     /// Matches each make-up to the miss it covers. A make-up that no longer matches a miss (for example after an edit
     /// removed the miss) stays in history so it can be deleted, but does not count as made up.
-    private func resolved(now: Date) -> (records: [DoseRecord], matched: Int) {
-        var records = walk(now: now).records
+    private func resolved(_ walked: [DoseRecord], now: Date) -> (records: [DoseRecord], matched: Int) {
+        var records = walked
         var unused = history.filter { $0.status == .madeUp && ($0.takenAt ?? .distantFuture) <= now }
         var matched = 0
         for i in records.indices where records[i].status == .missed {
@@ -132,25 +184,26 @@ public struct Planner: Sendable {
 
     /// Status of each past Vietnam day (keyed by the start of the day), for the calendar and the week strip.
     /// A day with several records takes the worst status: missed, made up, late, taken, paused.
-    public func dayStatuses(now: Date) -> [Date: DoseStatus] {
+    public func dayStatuses(now: Date) -> [Date: DoseStatus] { dayStatuses(timeline: timeline(now: now), now: now) }
+
+    func dayStatuses(timeline: [DoseRecord], now: Date) -> [Date: DoseStatus] {
         var result: [Date: DoseStatus] = [:]
-        for record in timeline(now: now) {
+        for record in timeline {
             // Each record belongs to its nearest main time, the same rule that picks the next dose after a take.
             // A make-up belongs to the day of the miss it covers and a late dose to the day of the dose it was late for,
             // not the day they were taken.
             let moment = [.madeUp, .late, .skipped].contains(record.status) ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
             let slot = firstSlot(after: moment.addingTimeInterval(-halfPeriod))
-            let day = VietnamClock.calendar.startOfDay(for: slot)
+            let day = VietnamClock.startOfDay(slot)
             if let existing = result[day], existing.severity >= record.status.severity { continue }
             result[day] = record.status
         }
         // Days off since the first record show as paused.
         if let cycle = settings.cycle, let first = history.compactMap({ $0.takenAt }).min() {
-            let calendar = VietnamClock.calendar
-            var day = calendar.startOfDay(for: first)
+            var day = VietnamClock.startOfDay(first)
             while day <= now {
                 if result[day] == nil, cycle.isBreak(day) { result[day] = .paused }
-                day = calendar.date(byAdding: .day, value: 1, to: day)!
+                day = day.addingTimeInterval(VietnamClock.day)
             }
         }
         return result
@@ -166,8 +219,12 @@ public struct Planner: Sendable {
     /// Reminder events for the next `horizonDays` days, sorted and without duplicate times.
     /// Doses after the pending one are planned as if never confirmed; "Taken" makes the app recompute.
     public func events(now: Date, horizonDays: Int = 14) -> [ReminderEvent] {
+        events(from: currentDose(now: now), now: now, horizonDays: horizonDays)
+    }
+
+    func events(from pending: Dose, now: Date, horizonDays: Int) -> [ReminderEvent] {
         let end = now.addingTimeInterval(TimeInterval(horizonDays) * VietnamClock.day)
-        var dose = currentDose(now: now)
+        var dose = pending
         var byDate: [Date: ReminderEvent] = [:]
         while dose.dueAt <= end {
             if let pause = overlappingPause(dose, startedBy: .distantFuture) {
@@ -186,9 +243,10 @@ public struct Planner: Sendable {
 
     /// Previews "back to the main time" for the next dose. `nil` when the pending dose does not follow directly from a take
     /// (after a miss or a pause the next dose already starts from the main time).
-    public func resetPreview(now: Date) -> ResetPreview? {
-        let state = walk(now: now)
-        guard state.followsTake, var take = takes(upTo: now).last else { return nil }
+    public func resetPreview(now: Date) -> ResetPreview? { resetPreview(walk(now: now), lastTake: takes(upTo: now).last) }
+
+    private func resetPreview(_ state: WalkState, lastTake: DoseRecord?) -> ResetPreview? {
+        guard state.followsTake, var take = lastTake else { return nil }
         take.nextAtMainTime = true
         let dose = doseAfterTake(take)
         return ResetPreview(dueAt: dose.dueAt, deadlineAt: dose.deadlineAt, exceedsMaxInterval: dose.exceedsMaxInterval)
@@ -344,11 +402,16 @@ public struct Planner: Sendable {
     }
 
     /// Walks the takes and skips up to `now`, counting misses, and returns the pending dose.
-    private func walk(now: Date) -> WalkState {
+    private func walk(now: Date) -> WalkState { walk(resolutions(upTo: now), now: now) }
+
+    /// `events` must be `resolutions(upTo: now)`.
+    private func walk(_ events: [DoseRecord], now: Date) -> WalkState {
         var state: WalkState?
-        for event in resolutions(upTo: now) {
+        for event in events {
             let t = event.takenAt!
-            guard var current = state else {
+            // `take()` moves the state out: `guard var current = state` left a second reference to `records`, so every
+            // append copied the whole array and the walk was quadratic (7 ms for one year of a 6-a-day dose).
+            guard var current = state.take() else {
                 if event.status == .taken {
                     // The first take ever: nothing was pending before it.
                     state = WalkState(dose: doseAfterTake(event), records: [event], followsTake: true)
@@ -364,7 +427,7 @@ public struct Planner: Sendable {
             apply(event, to: &current)
             state = current
         }
-        guard var final = state else {
+        guard var final = state.take() else {
             // No history yet: the first dose is the next dose time after `now`.
             var fresh = WalkState(dose: doseFromMainTime(activeSlot(firstSlot(after: now))))
             advance(&fresh, before: now)
@@ -400,12 +463,12 @@ public struct Planner: Sendable {
     private func advance(_ state: inout WalkState, before t: Date) {
         while true {
             if let pause = overlappingPause(state.dose, startedBy: t) {
-                state.records.append(DoseRecord(scheduledAt: state.dose.dueAt, takenAt: nil, status: .paused))
+                state.records.append(DoseRecord(derived: state.dose.dueAt, status: .paused))
                 state.dose = doseAfterPause(pause.end)
                 state.followsTake = false
             } else if state.dose.lateUntil < t {
                 state.missed += 1
-                state.records.append(DoseRecord(scheduledAt: state.dose.dueAt, takenAt: nil, status: .missed))
+                state.records.append(DoseRecord(derived: state.dose.dueAt, status: .missed))
                 state.dose = doseAfterMiss(state.dose)
                 state.followsTake = false
             } else {

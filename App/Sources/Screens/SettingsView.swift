@@ -1,3 +1,4 @@
+import AlarmKit
 import PillotCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -11,6 +12,7 @@ struct SettingsView: View {
     @State private var importing = false
     @State private var pendingRestore: Backup?
     @State private var backupIssue: String?
+    @State private var showsDiagnostics = false
 
     var body: some View {
         @Bindable var model = model
@@ -71,6 +73,19 @@ struct SettingsView: View {
                                     .font(.body.weight(.heavy).monospacedDigit())
                                     .foregroundStyle(Palette.text)
                             }
+                            InkDivider()
+                            Button { showsDiagnostics.toggle() } label: {
+                                HStack {
+                                    label(L("Chẩn đoán", "Diagnostics"))
+                                    Spacer()
+                                    Image(systemName: showsDiagnostics ? "chevron.up" : "chevron.down")
+                                        .font(.headline.weight(.black))
+                                        .foregroundStyle(Palette.text)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            if showsDiagnostics { diagnostics }
                         }
                     }
                 }
@@ -164,6 +179,30 @@ struct SettingsView: View {
             }
             .buttonStyle(NeoButtonStyle(fill: Palette.surfaceOnFill, large: false))
         }
+    }
+
+    /// Numbers from the latest scheduling pass. AlarmKit does not run in the Simulator, so this is how a real phone shows
+    /// how many alarms are set and how far ahead they reach.
+    @ViewBuilder
+    private var diagnostics: some View {
+        let report = model.scheduleReport
+        let when = { (date: Date) in "\(TodayText.dayTitle(date)), \(TimeFormatting.vn(date))" }
+        VStack(alignment: .leading, spacing: 10) {
+            NeoRow(title: L("Quyền báo thức", "Alarm permission"), detail: AlarmManager.shared.authorizationState == .authorized ? L("có", "yes") : L("chưa", "no")) { EmptyView() }
+            NeoRow(title: L("Báo thức đang hẹn", "Alarms set"), detail: report.map { "\($0.result.alarms)" } ?? "-") { EmptyView() }
+            NeoRow(title: L("Thông báo đang hẹn", "Notifications set"), detail: report.map { "\($0.result.notifications)" } ?? "-") { EmptyView() }
+            NeoRow(title: L("Nhắc xa nhất", "Last reminder set"), detail: report?.result.lastAlert.map(when) ?? "-") { EmptyView() }
+            NeoRow(title: L("Lần hẹn gần nhất", "Last scheduling"),
+                   detail: report.map { L("\(when($0.at)), mất \(Self.milliseconds($0.duration)) ms", "\(when($0.at)), took \(Self.milliseconds($0.duration)) ms") } ?? "-") { EmptyView() }
+            if let failures = report?.result.failures, failures > 0 {
+                NeoRow(title: L("Hẹn lỗi", "Failed"), detail: "\(failures)") { EmptyView() }
+            }
+            NeoRow(title: L("Dữ liệu cho widget", "Widget data"), detail: SharedStorage.container != nil ? L("có App Group", "App Group found") : L("không có App Group", "no App Group")) { EmptyView() }
+        }
+    }
+
+    private static func milliseconds(_ duration: Duration) -> Int {
+        Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
     }
 
     private func label(_ text: String) -> some View {

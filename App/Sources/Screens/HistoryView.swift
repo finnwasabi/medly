@@ -13,7 +13,8 @@ struct HistoryView: View {
     struct Entry: Identifiable {
         var medication: Medication
         var record: DoseRecord
-        var id: UUID { record.id }
+        /// Two medications can miss at the same moment, so the id needs both.
+        var id: String { "\(medication.id)\(record.id)" }
     }
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
@@ -22,6 +23,9 @@ struct HistoryView: View {
     var body: some View {
         let now = Date.now
         let shown = model.medications.filter { filter == nil || $0.id == filter }
+        // One walk over each history per redraw.
+        let summaries = shown.map { ($0, $0.planner.summary(now: now)) }
+        let month = monthStart(now: now)
         Group {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -30,9 +34,10 @@ struct HistoryView: View {
                         .foregroundStyle(Palette.text)
                         .padding(.top, 12)
                     if model.medications.count > 1 { filterBar }
-                    summaryCard(shown, now: now)
-                    calendarCard(days: mergedDayStatuses(shown.map { $0.planner.dayStatuses(now: now) }), now: now)
-                    entriesCard(shown.flatMap { med in med.planner.timeline(now: now).map { Entry(medication: med, record: $0) } }
+                    calendarCard(days: mergedDayStatuses(summaries.map { $0.1.dayStatuses() }), month: month, now: now)
+                    // Under the calendar: the counts follow the month it shows.
+                    summaryCard(summaries.flatMap(\.1.timeline), month: month)
+                    entriesCard(summaries.flatMap { med, summary in summary.timeline.map { Entry(medication: med, record: $0) } }
                         .sorted { moment($0.record) > moment($1.record) }
                         .prefix(20).map { $0 })
                 }
@@ -51,6 +56,11 @@ struct HistoryView: View {
 
     private func moment(_ record: DoseRecord) -> Date {
         record.status == .madeUp ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
+    }
+
+    /// The first day of the month on screen, Vietnam time.
+    private func monthStart(now: Date) -> Date {
+        calendar.date(byAdding: .month, value: monthOffset, to: calendar.date(from: calendar.dateComponents([.year, .month], from: now))!)!
     }
 
     private var filterBar: some View {
@@ -81,16 +91,21 @@ struct HistoryView: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private func summaryCard(_ medications: [Medication], now: Date) -> some View {
-        let planners = medications.map(\.planner)
-        let sum = { (value: (Planner) -> Int) in planners.map(value).reduce(0, +) }
-        let madeUp = sum { $0.madeUpCount(now: now) }
+    /// Counts for the month on screen, like the calendar below. Before 0.3.5 "taken" counted only since pills were last
+    /// added, so adding a pack reset it to 0. A record belongs to the dose it was for: a late or made-up dose to its dose time.
+    private func summaryCard(_ timeline: [DoseRecord], month: Date) -> some View {
+        let end = calendar.date(byAdding: .month, value: 1, to: month)!
+        let inMonth = timeline.filter { record in
+            let moment = [.madeUp, .late, .skipped].contains(record.status) ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
+            return moment >= month && moment < end
+        }
+        let count = { (statuses: [PillotCore.DoseStatus]) in inMonth.count(where: { statuses.contains($0.status) }) }
         // Top alignment keeps the numbers level even if one label wraps.
         return HStack(alignment: .top, spacing: 8) {
-            stat(value: sum { $0.daysTaken(now: now) }, label: L("đã uống", "taken"), status: .taken)
-            stat(value: sum { $0.lateCount(now: now) }, label: L("lần trễ", "late"), status: .late)
-            stat(value: madeUp, label: L("uống bù", "made up"), status: .madeUp)
-            stat(value: sum { $0.missedCount(now: now) } - madeUp, label: L("lần hụt", "missed"), status: .missed)
+            stat(value: count([.taken, .late]), label: L("đã uống", "taken"), status: .taken)
+            stat(value: count([.late]), label: L("lần trễ", "late"), status: .late)
+            stat(value: count([.madeUp]), label: L("uống bù", "made up"), status: .madeUp)
+            stat(value: count([.missed]), label: L("lần hụt", "missed"), status: .missed)
         }
         // Four columns: cap the text size so labels never break mid-word.
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
@@ -112,9 +127,8 @@ struct HistoryView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func calendarCard(days: [Date: PillotCore.DoseStatus], now: Date) -> some View {
+    private func calendarCard(days: [Date: PillotCore.DoseStatus], month: Date, now: Date) -> some View {
         let today = calendar.startOfDay(for: now)
-        let month = calendar.date(byAdding: .month, value: monthOffset, to: calendar.date(from: calendar.dateComponents([.year, .month], from: now))!)!
         let parts = calendar.dateComponents([.year, .month], from: month)
         let dayCount = calendar.range(of: .day, in: .month, for: month)!.count
         // Weeks start on Monday: weekday 2 gives 0 blank cells, Sunday (1) gives 6.
