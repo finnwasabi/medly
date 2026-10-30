@@ -25,6 +25,9 @@ struct NextDoseEntry: TimelineEntry {
         let state: State
         /// The dose time, when it was taken, or when reminders start again while resting.
         let time: Date
+
+        /// Due or late: the widget offers "Taken".
+        var isDue: Bool { state == .due || state == .late }
     }
 
     let date: Date
@@ -146,11 +149,17 @@ struct NextDoseView: View {
                     Text(clock(item.time)).font(.caption.weight(.bold)).minimumScaleFactor(0.6)
                 }
             case .accessoryRectangular:
-                VStack(alignment: .leading, spacing: 1) {
+                let rows = VStack(alignment: .leading, spacing: 1) {
                     ForEach(entry.items.prefix(2)) { item in
                         Text("\(clock(item.time)) · \(item.name)").font(.headline).lineLimit(1)
-                        Text(label(item.state)).font(.caption).lineLimit(1)
+                        Text(item.isDue ? (en ? "Tap when taken" : "Chạm khi đã uống") : label(item.state)).font(.caption).lineLimit(1)
                     }
+                }
+                // On the lock screen the whole widget is the button while the first dose is due.
+                if entry.items[0].isDue {
+                    Button(intent: MarkTakenIntent(ids: [entry.items[0].id])) { rows }.buttonStyle(.plain)
+                } else {
+                    rows
                 }
             case .systemSmall:
                 small(entry.items[0])
@@ -169,7 +178,11 @@ struct NextDoseView: View {
             Spacer(minLength: 0)
             Text(item.name).font(.headline.weight(.heavy)).lineLimit(2)
             Text(clock(item.time)).font(.system(size: 30, weight: .black, design: .rounded)).minimumScaleFactor(0.7)
-            Text(label(item.state)).font(.caption.weight(.heavy))
+            if item.isDue {
+                takenButton(item, title: en ? "Taken" : "Đã uống")
+            } else {
+                Text(label(item.state)).font(.caption.weight(.heavy))
+            }
         }
         .foregroundStyle(WidgetLook.ink)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -186,7 +199,36 @@ struct NextDoseView: View {
             Spacer(minLength: 4)
             Text(label(item.state)).font(.caption.weight(.bold)).foregroundStyle(.secondary)
             Text(clock(item.time)).font(.subheadline.weight(.black).monospacedDigit())
+            if item.isDue { takenButton(item, title: nil) }
         }
         .foregroundStyle(WidgetLook.ink)
+    }
+
+    /// Marks this medication as taken without opening the app. The app saves, reschedules and reloads the widget.
+    private func takenButton(_ item: NextDoseEntry.Item, title: String?) -> some View {
+        Button(intent: MarkTakenIntent(ids: [item.id])) {
+            Label(title ?? (en ? "Taken" : "Đã uống"), systemImage: "checkmark")
+                .labelStyle(TakenLabelStyle(showsTitle: title != nil))
+                .font(.caption.weight(.black))
+                .foregroundStyle(WidgetLook.ink)
+                .padding(.horizontal, title == nil ? 6 : 10)
+                .frame(minHeight: 26)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(WidgetLook.ink, lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(en ? "Taken \(item.name)" : "Đã uống \(item.name)")
+    }
+}
+
+/// Icon only in a list row, icon and title on the small widget.
+private struct TakenLabelStyle: LabelStyle {
+    let showsTitle: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon
+            if showsTitle { configuration.title }
+        }
     }
 }

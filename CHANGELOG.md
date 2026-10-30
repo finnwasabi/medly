@@ -5,6 +5,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-30
+
+### Added
+- Delete a dose tapped as Taken by mistake, from History, after the undo window: the dose comes back (still due if
+  there is time, missed if not) and the pill is given back.
+- Tap a day on the History calendar to list only that day's doses; tap it again or "Show recent" to go back. The recent
+  list has "Show more" after the first 20.
+- "Taken" right on the widget: on the small and medium widgets for each dose that is due or late, and on the lock screen
+  widget, which becomes the button while the first dose is due. It runs in the app, so alarms are rescheduled too.
+- The Meds tab explains the three steps until the first medication is added, and a new medication starts with the
+  cursor in its name.
+
 ## [0.3.6] - 2026-10-30
 
 ### Changed
@@ -188,7 +200,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/finnwasabi/pillot/compare/v0.3.6...v0.4.0
 [0.3.6]: https://github.com/finnwasabi/pillot/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/finnwasabi/pillot/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/finnwasabi/pillot/compare/v0.3.3...v0.3.4
