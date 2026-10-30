@@ -69,6 +69,8 @@ public struct MedicationSnapshot: Codable, Equatable, Sendable {
     public var lateCount: Int
     /// Misses that were made up, included in `missedCount`.
     public var madeUpCount: Int
+    /// Doses skipped on purpose, not counted as missed.
+    public var skippedCount: Int
     public var pillsTotal: Int?
     public var pillsRemaining: Int?
     public var refillReminder: RefillReminder
@@ -76,7 +78,7 @@ public struct MedicationSnapshot: Codable, Equatable, Sendable {
 
     public init(
         id: UUID, name: String, dosesPerDay: Int, lastTakenAt: Date?, nextDueAt: Date, deadlineAt: Date,
-        takenCount: Int, missedCount: Int, lateCount: Int, madeUpCount: Int,
+        takenCount: Int, missedCount: Int, lateCount: Int, madeUpCount: Int, skippedCount: Int = 0,
         pillsTotal: Int?, pillsRemaining: Int?, refillReminder: RefillReminder, pausedUntil: Date?
     ) {
         self.id = id
@@ -89,6 +91,7 @@ public struct MedicationSnapshot: Codable, Equatable, Sendable {
         self.missedCount = missedCount
         self.lateCount = lateCount
         self.madeUpCount = madeUpCount
+        self.skippedCount = skippedCount
         self.pillsTotal = pillsTotal
         self.pillsRemaining = pillsRemaining
         self.refillReminder = refillReminder
@@ -96,7 +99,7 @@ public struct MedicationSnapshot: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, dosesPerDay, lastTakenAt, nextDueAt, deadlineAt, takenCount, missedCount, lateCount, madeUpCount
+        case id, name, dosesPerDay, lastTakenAt, nextDueAt, deadlineAt, takenCount, missedCount, lateCount, madeUpCount, skippedCount
         case pillsTotal, pillsRemaining, refillReminder, pausedUntil
     }
 
@@ -112,6 +115,7 @@ public struct MedicationSnapshot: Codable, Equatable, Sendable {
         try c.encode(missedCount, forKey: .missedCount)
         try c.encode(lateCount, forKey: .lateCount)
         try c.encode(madeUpCount, forKey: .madeUpCount)
+        try c.encode(skippedCount, forKey: .skippedCount)
         try c.encode(pillsTotal, forKey: .pillsTotal)
         try c.encode(pillsRemaining, forKey: .pillsRemaining)
         try c.encode(refillReminder, forKey: .refillReminder)
@@ -131,6 +135,7 @@ public struct MedicationSnapshot: Codable, Equatable, Sendable {
             missedCount: try c.decode(Int.self, forKey: .missedCount),
             lateCount: try c.decode(Int.self, forKey: .lateCount),
             madeUpCount: try c.decode(Int.self, forKey: .madeUpCount),
+            skippedCount: try c.decodeIfPresent(Int.self, forKey: .skippedCount) ?? 0,
             pillsTotal: try c.decodeIfPresent(Int.self, forKey: .pillsTotal),
             pillsRemaining: try c.decodeIfPresent(Int.self, forKey: .pillsRemaining),
             refillReminder: try c.decode(RefillReminder.self, forKey: .refillReminder),
@@ -154,10 +159,11 @@ extension Medication {
             missedCount: planner.missedCount(now: now),
             lateCount: planner.lateCount(now: now),
             madeUpCount: planner.madeUpCount(now: now),
+            skippedCount: planner.skippedCount(now: now),
             pillsTotal: settings.pills?.total,
             pillsRemaining: settings.pills?.remaining,
             refillReminder: settings.refillReminder,
-            pausedUntil: settings.pausedUntil(now: now)
+            pausedUntil: planner.restingUntil(now: now)
         )
     }
 }
