@@ -37,7 +37,7 @@ struct ThemeView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 16)
         }
-        .background(Palette.background)
+        .screenBackground()
     }
 
     private func option(_ theme: AppTheme, _ title: String, icon: String, fill: Color) -> some View {

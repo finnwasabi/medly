@@ -8,7 +8,7 @@ import Testing
     /// are never further apart than the maximum gap.
     @Test func soundAlarmNeverMissingBeforeDeadline() {
         var rng = SeededGenerator(seed: 20_261_027)
-        let factors: [TimeInterval] = [0.75, 1, 26.0 / 24, 1.25, 1.5]
+        let factors: [TimeInterval] = [0.75, 1, 26.0 / 24, 1.25, 1.5, 2]
         var checked = 0
 
         for _ in 0..<600 {

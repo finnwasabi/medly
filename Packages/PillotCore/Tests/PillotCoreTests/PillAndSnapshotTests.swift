@@ -65,7 +65,11 @@ import Testing
           "pillsTotal": 28,
           "pillsRemaining": 16,
           "refillReminder": { "enabled": true, "daysBefore": 7 },
-          "pausedUntil": null
+          "pausedUntil": null,
+          "asNeeded": false,
+          "courseEnded": false,
+          "pillsPerDose": 1,
+          "takenToday": 1
         }
       ]
     }
@@ -107,7 +111,7 @@ import Testing
         #expect(med["pausedUntil"] as? String == "2026-10-29T01:00:00Z")
         #expect(json["updatedAt"] as? String == "2026-10-27T01:00:00Z")
         #expect(json.count == 4)
-        #expect(med.count == 15)
+        #expect(med.count == 19)
 
         let decoded = try Snapshot.decode(from: data)
         #expect(decoded == snapshot)

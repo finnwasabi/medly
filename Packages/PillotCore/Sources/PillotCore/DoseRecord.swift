@@ -50,6 +50,14 @@ public struct DoseRecord: Codable, Equatable, Identifiable, Sendable {
     public var nextAtMainTime: Bool
     /// For a make-up: the `scheduledAt` of the missed dose it covers.
     public var makesUpFor: Date?
+    /// How many pills this dose subtracted, when more than one a dose (0.5.0). `nil` means `consumedPill` says it.
+    public var pillsUsed: Int?
+    /// The Vietnam day this record belongs to, frozen when the schedule changed (see `Planner.freezeHistory`), so a new
+    /// main time or a new number of doses a day does not move old doses to other days.
+    public var day: Date?
+
+    /// The pills to give back when this record is deleted or undone.
+    var pillsToRestore: Int { pillsUsed ?? (consumedPill ? 1 : 0) }
 
     public init(
         id: UUID = UUID(),

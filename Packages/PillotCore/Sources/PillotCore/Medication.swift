@@ -10,6 +10,8 @@ public struct Medication: Codable, Equatable, Identifiable, Sendable {
     public var icon: String
     public var settings: ReminderSettings
     public var history: [DoseRecord]
+    /// How past doses turned out under earlier schedules, frozen when the schedule changed (0.5.0).
+    public var archive: [DoseRecord]
 
     /// Long names would push alarm titles past what the lock screen shows.
     public static let nameLimit = 40
@@ -18,7 +20,7 @@ public struct Medication: Codable, Equatable, Identifiable, Sendable {
 
     public init(
         id: UUID = UUID(), name: String, color: Int = 0, icon: String = "pills.fill",
-        settings: ReminderSettings = ReminderSettings(), history: [DoseRecord] = []
+        settings: ReminderSettings = ReminderSettings(), history: [DoseRecord] = [], archive: [DoseRecord] = []
     ) {
         self.id = id
         self.name = String(name.prefix(Self.nameLimit))
@@ -26,14 +28,16 @@ public struct Medication: Codable, Equatable, Identifiable, Sendable {
         self.icon = icon
         self.settings = settings
         self.history = history
+        self.archive = archive
     }
 
     /// The scheduling logic over this medication's settings and history. Writing it back keeps both in sync.
     public var planner: Planner {
-        get { Planner(settings: settings, history: history) }
+        get { Planner(settings: settings, history: history, archive: archive) }
         set {
             settings = newValue.settings
             history = newValue.history
+            archive = newValue.archive
         }
     }
 
@@ -46,5 +50,6 @@ public struct Medication: Codable, Equatable, Identifiable, Sendable {
         icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? "pills.fill"
         settings = try c.decodeIfPresent(ReminderSettings.self, forKey: .settings) ?? ReminderSettings()
         history = try c.decodeIfPresent([DoseRecord].self, forKey: .history) ?? []
+        archive = try c.decodeIfPresent([DoseRecord].self, forKey: .archive) ?? []
     }
 }

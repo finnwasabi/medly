@@ -548,3 +548,50 @@ struct FullScreenScroll<Content: View>: View {
         }
     }
 }
+
+/// A faint pattern of small pills and dots behind every screen, so the cream background is not one flat colour.
+/// It is drawn in screen coordinates, so the part behind the tab bar lines up with the part behind the screen, and it
+/// stays put while the content scrolls over it. One Canvas per area, redrawn only when its size changes.
+struct PillPattern: View {
+    private static let step: CGFloat = 46
+
+    var body: some View {
+        GeometryReader { proxy in
+            let origin = proxy.frame(in: .global).origin
+            Canvas { context, size in
+                let ink = GraphicsContext.Shading.color(Palette.ink.opacity(0.06))
+                let step = Self.step
+                let startRow = Int(floor(origin.y / step)) - 1
+                let rows = Int(ceil(size.height / step)) + 2
+                let startColumn = Int(floor(origin.x / step)) - 1
+                let columns = Int(ceil(size.width / step)) + 2
+                for row in startRow..<(startRow + rows) {
+                    for column in startColumn..<(startColumn + columns) {
+                        // Every other row shifts half a step, like a brick wall, so no straight lines run down the screen.
+                        let x = (CGFloat(column) + (row.isMultiple(of: 2) ? 0 : 0.5)) * step - origin.x
+                        let y = CGFloat(row) * step - origin.y
+                        if (row + column).isMultiple(of: 3) {
+                            context.fill(Path(ellipseIn: CGRect(x: x - 2, y: y - 2, width: 4, height: 4)), with: ink)
+                        } else {
+                            var pill = context
+                            pill.translateBy(x: x, y: y)
+                            pill.rotate(by: .degrees((row + column).isMultiple(of: 2) ? -35 : 35))
+                            let shape = Path(roundedRect: CGRect(x: -8, y: -3.5, width: 16, height: 7), cornerRadius: 3.5)
+                            pill.stroke(shape, with: ink, lineWidth: 1.5)
+                            pill.stroke(Path { $0.move(to: CGPoint(x: 0, y: -3.5)); $0.addLine(to: CGPoint(x: 0, y: 3.5)) }, with: ink, lineWidth: 1.5)
+                        }
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+extension View {
+    /// The screen background: cream with the faint pill pattern.
+    func screenBackground() -> some View {
+        background { ZStack { Palette.background; PillPattern() }.ignoresSafeArea() }
+    }
+}

@@ -217,6 +217,14 @@ final class AppModel {
         await resync(cancelActiveFor: Set(targets))
     }
 
+    /// Stop or the side button on a ringing alarm: ring again after the snooze length. Medications already taken in the
+    /// meantime (for example on another alarm) are left out.
+    func snooze(_ ids: [UUID], now: Date = .now) async {
+        let due = ids.compactMap { id in medications.first { $0.id == id } }.filter { $0.planner.currentDose(now: now).dueAt <= now }
+        guard !due.isEmpty else { return }
+        await scheduler.snooze(due.map(\.id), names: AlertPlanner.names(due.map(\.name), language: language), snooze: TimeInterval(snoozeMinutes * 60))
+    }
+
     func undo(_ id: UUID, now: Date = .now) async {
         guard let i = medications.firstIndex(where: { $0.id == id }), medications[i].planner.undoLastTaken(now: now) else { return }
         persist()

@@ -26,15 +26,19 @@ public struct PillCounter: Codable, Equatable, Sendable {
 
     /// Subtracts a pill for a dose. Returns `false` when none are left.
     @discardableResult
-    public mutating func consume() -> Bool {
-        guard remaining > 0 else { return false }
-        remaining -= 1
-        return true
+    public mutating func consume() -> Bool { consume(1) > 0 }
+
+    /// Subtracts the pills of one dose, as many as are left. Returns how many were subtracted.
+    @discardableResult
+    public mutating func consume(_ count: Int) -> Int {
+        let used = min(max(0, count), remaining)
+        remaining -= used
+        return used
     }
 
-    /// Gives a pill back when "Taken" is undone.
-    public mutating func restore() {
-        remaining = min(total, remaining + 1)
+    /// Gives pills back when "Taken" is undone.
+    public mutating func restore(_ count: Int = 1) {
+        remaining = min(total, remaining + max(0, count))
     }
 
     /// "Add pills": adds to both the remaining count and the total.

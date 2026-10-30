@@ -49,7 +49,7 @@ struct HistoryView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
-            .background(Palette.background)
+            .screenBackground()
             .sheet(item: $editing) { entry in
                 EditTakenTimeSheet(medicationID: entry.medication.id, record: entry.record)
             }
@@ -306,6 +306,14 @@ struct EditTakenTimeSheet: View {
     @State private var date = Date.now
     @State private var confirmRemove = false
 
+    /// On the delete button, not the sheet: since iOS 26 the dialog is a popover from the view it is attached to.
+    private var removeDialog: some ViewModifier {
+        RemoveDialog(isPresented: $confirmRemove, title: removeTitle, message: removeMessage) {
+            model.update(medicationID) { $0.planner.removeRecord(id: record.id) }
+            dismiss()
+        }
+    }
+
     private var removeTitle: String {
         switch record.status {
         case .skipped: L("Xoá lần bỏ qua này?", "Delete this skip?")
@@ -333,6 +341,7 @@ struct EditTakenTimeSheet: View {
                         .card()
                     Button(L("Xoá lần bỏ qua", "Delete skip"), role: .destructive) { confirmRemove = true }
                         .buttonStyle(NeoButtonStyle(fill: Palette.coral, large: false))
+                        .modifier(removeDialog)
                 } else {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(L("Giờ uống (giờ VN)", "Dose time (VN time)"))
@@ -345,20 +354,12 @@ struct EditTakenTimeSheet: View {
                 .card()
                 Button(record.status == .madeUp ? L("Xoá lần uống bù", "Delete make-up") : L("Xoá lần uống này", "Delete this dose"), role: .destructive) { confirmRemove = true }
                     .buttonStyle(NeoButtonStyle(fill: Palette.coral, large: false))
+                    .modifier(removeDialog)
                 }
                 Spacer()
             }
             .padding(16)
-            .background(Palette.background)
-            .confirmationDialog(removeTitle,
-                                isPresented: $confirmRemove, titleVisibility: .visible) {
-                Button(L("Xoá", "Delete"), role: .destructive) {
-                    model.update(medicationID) { $0.planner.removeRecord(id: record.id) }
-                    dismiss()
-                }
-            } message: {
-                Text(removeMessage)
-            }
+            .screenBackground()
             .navigationTitle(record.status == .skipped ? L("Lần bỏ qua", "Skipped dose") : L("Sửa giờ uống", "Edit time"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -381,3 +382,18 @@ struct EditTakenTimeSheet: View {
 }
 
 #Preview { HistoryView().environment(AppModel.shared) }
+
+private struct RemoveDialog: ViewModifier {
+    @Binding var isPresented: Bool
+    let title: String
+    let message: String
+    let remove: () -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(title, isPresented: $isPresented, titleVisibility: .visible) {
+            Button(L("Xoá", "Delete"), role: .destructive, action: remove)
+        } message: {
+            Text(message)
+        }
+    }
+}

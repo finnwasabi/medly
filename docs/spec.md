@@ -143,7 +143,7 @@ newest `updatedAt` and answers older ones with 200 and `"stale": true`. Every re
 - Times are UTC ISO 8601 without fractional seconds. `pillsTotal` and `pillsRemaining` are `null` when not counting.
   `lastTakenAt`, `pausedUntil` and `name` may be `null`. `name` is the user's name from the app, so the bot can use it.
 - `missedCount` counts every miss, including made-up ones. `madeUpCount` counts the made-up ones.
-- At most 30 medications per snapshot. `skippedCount` was added in 0.3.0 and may be missing. `pausedUntil` also covers
+- At most 30 medications per snapshot. `skippedCount` was added in 0.3.0 and may be missing. `asNeeded` (taken when needed: no schedule, `nextDueAt` and `deadlineAt` are far in the future and mean nothing), `courseEnded` (past the last day of a course; `pausedUntil` is then null), `pillsPerDose` and `takenToday` were added in 0.5.0 and may be missing. `pausedUntil` also covers
   days off in a cycle.
 - Version 1 (0.1.x: the fields of one medication at the top level, with `daysTaken` instead of `takenCount` and no `id`,
   `name` or `dosesPerDay`) is still accepted and stored as version 2 with one medication.

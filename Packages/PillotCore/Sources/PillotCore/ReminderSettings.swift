@@ -94,6 +94,24 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
     public var pauses: [PausePeriod]
     /// Days on and off; `nil` means every day.
     public var cycle: DoseCycle?
+    /// Pills subtracted per dose (0.5.0).
+    public var pillsPerDose: Int
+    /// The last day of a course, the start of that Vietnam day; `nil` means no end. Nothing rings after it.
+    public var endDay: Date?
+    /// Taken only when needed: no schedule, no alarms and no misses. `minGap` and `maxPerDay` are what the app warns about.
+    public var asNeeded: Bool
+    public var minGap: TimeInterval
+    public var maxPerDay: Int
+    /// When the schedule last changed. History before it is frozen in `Planner.archive` (0.5.0).
+    public var scheduleSince: Date?
+
+    /// Pills per dose allowed in the editor.
+    public static let pillsPerDoseRange = 1...10
+
+    /// The moment the course is over: the end of `endDay`.
+    public var courseEnd: Date? { endDay.map { VietnamClock.startOfDay($0).addingTimeInterval(VietnamClock.day) } }
+
+    public func courseEnded(now: Date) -> Bool { courseEnd.map { now >= $0 } ?? false }
 
     public init(
         mainHour: Int = 21,
@@ -113,7 +131,13 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         pills: PillCounter? = nil,
         refillReminder: RefillReminder = RefillReminder(),
         pauses: [PausePeriod] = [],
-        cycle: DoseCycle? = nil
+        cycle: DoseCycle? = nil,
+        pillsPerDose: Int = 1,
+        endDay: Date? = nil,
+        asNeeded: Bool = false,
+        minGap: TimeInterval = 4 * 3600,
+        maxPerDay: Int = 4,
+        scheduleSince: Date? = nil
     ) {
         self.mainHour = mainHour
         self.mainMinute = mainMinute
@@ -133,6 +157,12 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         self.refillReminder = refillReminder
         self.pauses = pauses
         self.cycle = cycle
+        self.pillsPerDose = min(max(pillsPerDose, Self.pillsPerDoseRange.lowerBound), Self.pillsPerDoseRange.upperBound)
+        self.endDay = endDay.map(VietnamClock.startOfDay)
+        self.asNeeded = asNeeded
+        self.minGap = minGap
+        self.maxPerDay = maxPerDay
+        self.scheduleSince = scheduleSince
     }
 
     /// Divisors of 24, so the doses fall on the same clock times every day.
@@ -141,8 +171,10 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
     /// Time between two scheduled doses: 24 h divided by `dosesPerDay`.
     public var period: TimeInterval { 24 * 3600 / TimeInterval(dosesPerDay) }
 
-    /// The range the maximum gap may be set to: from one period up to one and a half.
-    public var maxIntervalRange: ClosedRange<TimeInterval> { period...(period * 1.5) }
+    /// The range the maximum gap may be set to: from one period up to two (48 h for a daily dose, 0.4.2; 1.5 before).
+    /// Never shorter than a period: every dose would pull the next one earlier, so a 12 h gap on a daily dose would
+    /// really be two doses a day. The app says to pick more doses a day instead.
+    public var maxIntervalRange: ClosedRange<TimeInterval> { period...(period * 2) }
 
     /// Whether a dose taken at `takenAt` still shows as "Taken" at `now`, on Today and in the widget: for half the time
     /// to the next dose or while it can be undone. A daily dose also stays "Taken" for the rest of its Vietnam day, so a
@@ -181,5 +213,11 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         refillReminder = try c.decodeIfPresent(RefillReminder.self, forKey: .refillReminder) ?? d.refillReminder
         pauses = try c.decodeIfPresent([PausePeriod].self, forKey: .pauses) ?? d.pauses
         cycle = try c.decodeIfPresent(DoseCycle.self, forKey: .cycle)
+        pillsPerDose = try c.decodeIfPresent(Int.self, forKey: .pillsPerDose) ?? d.pillsPerDose
+        endDay = try c.decodeIfPresent(Date.self, forKey: .endDay)
+        asNeeded = try c.decodeIfPresent(Bool.self, forKey: .asNeeded) ?? d.asNeeded
+        minGap = try c.decodeIfPresent(TimeInterval.self, forKey: .minGap) ?? d.minGap
+        maxPerDay = try c.decodeIfPresent(Int.self, forKey: .maxPerDay) ?? d.maxPerDay
+        scheduleSince = try c.decodeIfPresent(Date.self, forKey: .scheduleSince)
     }
 }
