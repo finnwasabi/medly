@@ -5,6 +5,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-30
+
+### Fixed
+- The whole tab bar flashed on every tab change: each screen carried its own copy of the bar. There is one bar again, and the highlight slides under the labels instead of fading over them. The same fix keeps the medication editor and the segmented choices on a single sheet and a single highlight.
+
 ## [0.3.2] - 2026-10-30
 
 ### Fixed
@@ -141,7 +146,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/finnwasabi/pillot/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/finnwasabi/pillot/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/finnwasabi/pillot/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/finnwasabi/pillot/compare/v0.2.1...v0.3.0
