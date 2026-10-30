@@ -4,8 +4,8 @@ import SwiftUI
 /// The list of medications. Each one has its own times, doses per day, maximum gap and pill count.
 struct MedsView: View {
     @Environment(AppModel.self) private var model
-    @State private var editing: Medication?
-    @State private var adding = false
+    @Environment(\.editMedication) private var editMedication
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
@@ -21,12 +21,12 @@ struct MedsView: View {
                     }
                     .padding(.top, 12)
                     ForEach(model.medications) { medication in
-                        Button { editing = medication } label: { row(medication) }
+                        Button { editMedication(medication) } label: { row(medication) }
                             .buttonStyle(PressableCardStyle())
                             .accessibilityHint(L("Sửa thuốc", "Edit medication"))
                     }
                     if model.medications.count < Medication.limit {
-                        Button { adding = true } label: { Label(L("Thêm thuốc", "Add medication"), systemImage: "plus") }
+                        Button { editMedication(nil) } label: { Label(L("Thêm thuốc", "Add medication"), systemImage: "plus") }
                             .buttonStyle(NeoButtonStyle(fill: Palette.yellow))
                     } else {
                         Text(L("Tối đa \(Medication.limit) thuốc.", "Up to \(Medication.limit) medications."))
@@ -42,10 +42,10 @@ struct MedsView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
+                // A medication added or deleted slides in or out instead of popping.
+                .animation(Motion.snappy(reduceMotion), value: model.medications.map(\.id))
             }
             .background(Palette.background)
-            .sheet(item: $editing) { MedicationEditor(medication: $0) }
-            .sheet(isPresented: $adding) { MedicationEditor(medication: nil) }
         }
     }
 
@@ -95,6 +95,18 @@ struct PressableCardStyle: ButtonStyle {
             .offset(x: configuration.isPressed ? 2 : 0, y: configuration.isPressed ? 2 : 0)
             .animation(.snappy(duration: 0.12), value: configuration.isPressed)
     }
+}
+
+/// Opens the medication editor: `nil` adds one. A single sheet at the root presents it for every screen, so a screen
+/// that is swapped out by a tab change or redrawn by its timeline never owns a presentation (0.3.1: Add stopped
+/// opening after the first sheet was closed).
+struct EditMedicationAction {
+    let open: (Medication?) -> Void
+    func callAsFunction(_ medication: Medication?) { open(medication) }
+}
+
+extension EnvironmentValues {
+    @Entry var editMedication = EditMedicationAction { _ in }
 }
 
 /// Adds or edits one medication. Changes apply on Save, except pausing, which applies right away.

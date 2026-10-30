@@ -3,12 +3,13 @@ import SwiftUI
 
 struct TodayView: View {
     @Environment(AppModel.self) private var model
-    @State private var addingMedication = false
+    @Environment(\.editMedication) private var editMedication
     @State private var confirmRealign: (id: UUID, preview: ResetPreview)?
     @State private var tapped = 0
     /// The medication whose "skip this dose" waits for confirmation.
     @State private var confirmSkip: Medication?
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Side by side normally, stacked at accessibility text sizes so nothing overflows the screen.
     private var rowLayout: AnyLayout {
@@ -38,10 +39,11 @@ struct TodayView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
+                    // Taking, skipping or undoing a dose reshapes and reorders the cards: animate that, not the minute ticks.
+                    .animation(Motion.snappy(reduceMotion), value: model.medications.map(\.history.count))
                 }
             }
             .background(Palette.background)
-            .sheet(isPresented: $addingMedication) { MedicationEditor(medication: nil) }
             .confirmationDialog(L("Bỏ qua lần uống này?", "Skip this dose?"), isPresented: Binding(get: { confirmSkip != nil }, set: { if !$0 { confirmSkip = nil } }),
                                 titleVisibility: .visible, presenting: confirmSkip) { medication in
                 Button(L("Bỏ qua lần này", "Skip this dose")) { model.skip(medication.id) }
@@ -108,7 +110,7 @@ struct TodayView: View {
             Text(L("Thêm thuốc đầu tiên, đặt giờ nhắc, vậy là xong. Mỗi loại thuốc có giờ và số lần uống riêng.",
                    "Add your first one and set a time, that's it. Every medication gets its own times and doses."))
                 .font(.body.weight(.medium))
-            Button(L("Thêm thuốc", "Add medication")) { addingMedication = true }
+            Button(L("Thêm thuốc", "Add medication")) { editMedication(nil) }
                 .buttonStyle(NeoButtonStyle(fill: Palette.surfaceOnFill))
         }
         .foregroundStyle(Palette.onFill)

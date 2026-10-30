@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-30
+
+### Fixed
+- Add medication sometimes opened nothing on the Meds tab, and from then on no screen could open the editor until the app was restarted. Adding and editing now share one editor sheet at the root of the app.
+
+### Changed
+- Smoother navigation: the tab bar highlight slides between tabs, the tapped icon bounces and the new screen fades in. Segmented choices slide too, stepper numbers roll, and medication cards animate when added, removed, taken or skipped. Reduce Motion turns the movement off.
+
 ## [0.3.1] - 2026-10-30
 
 ### Changed
@@ -133,7 +141,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/finnwasabi/pillot/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/finnwasabi/pillot/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/finnwasabi/pillot/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/finnwasabi/pillot/compare/v0.2.0...v0.2.1

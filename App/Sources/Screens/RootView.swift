@@ -1,3 +1,4 @@
+import PillotCore
 import SwiftUI
 
 struct RootView: View {
@@ -6,6 +7,17 @@ struct RootView: View {
 
     // SceneStorage keeps the tab when a language change rebuilds the tree.
     @SceneStorage("tab") private var tab = 0
+    @Namespace private var pill
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Taps per tab, to bounce the icon that was tapped.
+    @State private var taps = [0, 0, 0, 0]
+    @State private var editor: EditorRequest?
+
+    /// One request per tap, so opening the same medication twice still presents.
+    private struct EditorRequest: Identifiable {
+        let id = UUID()
+        let medication: Medication?
+    }
 
     private var tabs: [(title: String, icon: String)] {
         [(L("Hôm nay", "Today"), "sun.max.fill"), (L("Thuốc", "Meds"), "pills.fill"),
@@ -21,9 +33,13 @@ struct RootView: View {
             default: TodayView()
             }
         }
+        // The new screen fades in over the old one, which leaves at once: one screen drawn per frame, no crossfade of two.
+        .transition(.asymmetric(insertion: reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)), removal: .identity))
         // The screens have no NavigationStack of their own: one would swallow this inset, and the end of every
         // list would stay hidden under the bar (0.2.0 on a 6.1 inch phone).
         .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
+        .sheet(item: $editor) { MedicationEditor(medication: $0.medication) }
+        .environment(\.editMedication, EditMedicationAction { editor = EditorRequest(medication: $0) })
         .onAppear { if let selectedTab { tab = selectedTab } }
     }
 
@@ -31,10 +47,15 @@ struct RootView: View {
         HStack(spacing: 4) {
             ForEach(tabs.indices, id: \.self) { index in
                 let selected = tab == index
-                Button { tab = index } label: {
+                Button {
+                    taps[index] += 1
+                    guard tab != index else { return }
+                    withAnimation(Motion.snappy(reduceMotion)) { tab = index }
+                } label: {
                     VStack(spacing: 2) {
                         Image(systemName: tabs[index].icon)
                             .font(.system(size: 18, weight: .bold))
+                            .symbolEffect(.bounce, value: taps[index])
                         Text(tabs[index].title)
                             .font(.caption2.weight(.heavy))
                             .lineLimit(1)
@@ -42,9 +63,14 @@ struct RootView: View {
                     }
                     .foregroundStyle(selected ? Palette.onFill : Palette.text)
                     .frame(maxWidth: .infinity, minHeight: 50)
-                    .background(selected ? Palette.yellow : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay {
-                        if selected { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Palette.ink, lineWidth: 2) }
+                    .background {
+                        // One pill that slides to the selected tab.
+                        if selected {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Palette.yellow)
+                                .strokeBorder(Palette.ink, lineWidth: 2)
+                                .matchedGeometryEffect(id: "pill", in: pill)
+                        }
                     }
                     .contentShape(Rectangle())
                 }
