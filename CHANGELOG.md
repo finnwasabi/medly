@@ -5,6 +5,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-10-30
+
+### Changed
+- Only the dose coming up gets the whole reminder chain (repeats, hourly, final stretch, overdue). Later doses get
+  their main reminder and the ringing deadline, and get the whole chain once they are next. Four medications at 1, 2, 3
+  and 6 doses a day now fit 14 days in the alarm budget instead of 57 hours.
+- Rescheduling touches only what changed. Each alarm and notification remembers what it was made from, and a pass
+  leaves the matching ones alone. In the Simulator with the sample data: reopening the app went from 1,998 ms to 74 ms
+  with nothing changed; tapping Taken on one of four medications changed 102 alarms instead of replacing all of them.
+- The app asks iOS for a background refresh every few hours to top the alarms up when it is not opened for days.
+  iOS decides whether it runs; Diagnostics shows the last run.
+
+### Added
+- Diagnostics shows how many alarms and notifications the last pass changed, and the last background run.
+
 ## [0.3.5] - 2026-10-30
 
 ### Changed
@@ -173,7 +188,8 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/finnwasabi/pillot/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/finnwasabi/pillot/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/finnwasabi/pillot/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/finnwasabi/pillot/compare/v0.3.2...v0.3.3

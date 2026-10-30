@@ -110,11 +110,30 @@ import Testing
         #expect(AlertPlanner.title(for: .main, names: "Iron", language: .vi) == "Tới giờ uống Iron")
     }
 
+    /// Twenty medications at six doses a day overflow the budget: the earliest alerts are kept, and every dose inside
+    /// the span they cover still has its main reminder.
     @Test func alarmBudgetKeepsTheEarliest() {
-        let meds = (0..<4).map { Medication(name: "M\($0)", settings: ReminderSettings(mainHour: 6 + $0, dosesPerDay: 3)) }
+        let meds = (0..<20).map { Medication(name: "M\($0)", settings: ReminderSettings(mainHour: 0, mainMinute: $0 * 2, dosesPerDay: 6, maxInterval: 4 * hour)) }
         let now = vn(2026, 10, 1, 5)
         let alerts = AlertPlanner.alerts(for: meds.map { MedicationReminders($0, now: now, language: .en) }, vibrateOnly: false)
         #expect(alerts.count == AlertPlanner.alarmLimit)
         #expect(alerts.map(\.date) == alerts.map(\.date).sorted())
+        let covered = alerts.last!.date
+        for med in meds {
+            var due = med.planner.currentDose(now: now).dueAt
+            while due <= covered {
+                #expect(alerts.contains { $0.date == due && $0.medicationIDs.contains(med.id) }, "\(med.name) at \(due)")
+                due = due.addingTimeInterval(4 * hour)
+            }
+        }
+    }
+
+    /// Since 0.3.6 only the pending dose gets the whole chain, so four medications reach a week ahead (57 hours before).
+    @Test func fourMedicationsCoverAWeek() {
+        let meds = [1, 2, 3, 6].enumerated().map { i, n in Medication(name: "M\(i)", settings: ReminderSettings(mainHour: 7 + i, dosesPerDay: n, maxInterval: 24 * hour / TimeInterval(n))) }
+        let now = vn(2026, 10, 1, 5)
+        let alerts = AlertPlanner.alerts(for: meds.map { MedicationReminders($0, now: now, language: .en) }, vibrateOnly: false)
+        #expect(alerts.count <= AlertPlanner.alarmLimit)
+        #expect(alerts.last!.date.timeIntervalSince(now) >= 7 * 24 * hour)
     }
 }

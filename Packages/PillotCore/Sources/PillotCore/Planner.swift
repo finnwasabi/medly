@@ -217,7 +217,10 @@ public struct Planner: Sendable {
     }
 
     /// Reminder events for the next `horizonDays` days, sorted and without duplicate times.
-    /// Doses after the pending one are planned as if never confirmed; "Taken" makes the app recompute.
+    /// The pending dose gets the whole chain (repeats, hourly, final, deadline, overdue). Doses after it are planned as if
+    /// never confirmed, with only their main reminder and the ringing deadline: full chains for every future dose filled
+    /// the 300-alarm budget in 57 hours with four medications. "Taken" or opening the app recomputes, and the next dose
+    /// then becomes the pending one with its whole chain.
     public func events(now: Date, horizonDays: Int = 14) -> [ReminderEvent] {
         events(from: currentDose(now: now), now: now, horizonDays: horizonDays)
     }
@@ -226,12 +229,15 @@ public struct Planner: Sendable {
         let end = now.addingTimeInterval(TimeInterval(horizonDays) * VietnamClock.day)
         var dose = pending
         var byDate: [Date: ReminderEvent] = [:]
+        var isPending = true
         while dose.dueAt <= end {
             if let pause = overlappingPause(dose, startedBy: .distantFuture) {
                 dose = doseAfterPause(pause.end)
                 continue
             }
-            for event in chain(for: dose) where event.date > now && event.date <= end {
+            let planned = isPending ? chain(for: dose) : mainAndDeadline(for: dose)
+            isPending = false
+            for event in planned where event.date > now && event.date <= end {
                 if settings.pauses.contains(where: { $0.contains(event.date) }) { continue }
                 if let existing = byDate[event.date], priority(existing.kind) >= priority(event.kind) { continue }
                 byDate[event.date] = event
@@ -560,6 +566,12 @@ public struct Planner: Sendable {
     /// A dose at its scheduled time, as if the previous one was taken on time one period before.
     private func doseFromMainTime(_ slot: Date) -> Dose {
         dose(slot: slot, anchor: slot.addingTimeInterval(-min(maxInterval, period)))
+    }
+
+    /// The light plan for a dose after the pending one.
+    private func mainAndDeadline(for dose: Dose) -> [ReminderEvent] {
+        [ReminderEvent(date: dose.dueAt, kind: .main, requiresSound: false, dueAt: dose.dueAt, deadlineAt: dose.deadlineAt),
+         ReminderEvent(date: dose.deadlineAt, kind: .deadline, requiresSound: true, dueAt: dose.dueAt, deadlineAt: dose.deadlineAt)]
     }
 
     private func chain(for dose: Dose) -> [ReminderEvent] {

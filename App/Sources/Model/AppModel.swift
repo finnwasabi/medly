@@ -1,4 +1,5 @@
 import AlarmKit
+import BackgroundTasks
 import Foundation
 import Network
 import PillotCore
@@ -299,6 +300,28 @@ final class AppModel {
 
     // MARK: Rescheduling
 
+    // MARK: Background refresh
+
+    nonisolated static let refreshTask = "io.github.finnwasabi.nersdaily.refresh"
+
+    /// When iOS last woke the app in the background to top up the reminders.
+    private(set) var lastBackgroundRefresh: Date? = UserDefaults.standard.object(forKey: "lastBackgroundRefresh") as? Date
+
+    /// Asks iOS for a background run in a few hours. Without one the reminders are only refilled when the app is opened
+    /// or "Taken" is tapped, and the alarms run out after the planned days.
+    nonisolated static func scheduleRefresh() {
+        let request = BGAppRefreshTaskRequest(identifier: refreshTask)
+        request.earliestBeginDate = .now.addingTimeInterval(6 * 3600)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    func backgroundRefresh() async {
+        Self.scheduleRefresh()
+        lastBackgroundRefresh = .now
+        UserDefaults.standard.set(lastBackgroundRefresh, forKey: "lastBackgroundRefresh")
+        await resync()
+    }
+
     /// The latest scheduling pass, shown under Diagnostics in Settings.
     private(set) var scheduleReport: ScheduleReport?
 
@@ -334,7 +357,7 @@ final class AppModel {
                 language: language
             )
             let started = ContinuousClock.now
-            let result = await scheduler.apply(alerts, cancelActiveFor: cancel, snooze: TimeInterval(snoozeMinutes * 60))
+            let result = await scheduler.apply(alerts, cancelActiveFor: cancel, snooze: TimeInterval(snoozeMinutes * 60), language: language)
             scheduleReport = ScheduleReport(result: result, at: now, duration: ContinuousClock.now - started)
             let failures = result.failures
             // Screenshot launches (`-screen`) run in the Simulator, which always denies alarms.

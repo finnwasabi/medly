@@ -10,18 +10,28 @@ import Testing
         return planner.events(now: vn(2026, 10, 1, 23, 1))
     }()
 
+    /// More events than either budget holds, every third one a ringing deadline. One medication's real plan fits under
+    /// the budgets since 0.3.6, so the limits are tested on this.
+    let many: [ReminderEvent] = (0..<500).map { i in
+        let date = vn(2026, 10, 2, 0).addingTimeInterval(TimeInterval(i) * 600)
+        let deadline = i % 3 == 0
+        return ReminderEvent(date: date, kind: deadline ? .deadline : .main, requiresSound: deadline, dueAt: date, deadlineAt: date)
+    }
+
     @Test func soundModeUsesAlarmsForEverything() {
         let alerts = AlertPlanner.alerts(for: events, vibrateOnly: false, refillMessage: nil)
-        #expect(alerts.count == min(events.count, AlertPlanner.alarmLimit))
-        #expect(events.count > AlertPlanner.alarmLimit)
+        #expect(alerts.count == events.count)
         #expect(alerts.allSatisfy { $0.usesAlarm })
+        let capped = AlertPlanner.alerts(for: many, vibrateOnly: false, refillMessage: nil)
+        #expect(capped.count == AlertPlanner.alarmLimit)
+        #expect(capped.map(\.date) == Array(many.map(\.date).prefix(AlertPlanner.alarmLimit)))
         #expect(alerts.first?.title == "Tới giờ uống thuốc")
         #expect(alerts.first?.date == vn(2026, 10, 2, 21))
     }
 
     @Test func vibrateOnlyKeepsEveryDeadlineAsAlarm() {
-        let alerts = AlertPlanner.alerts(for: events, vibrateOnly: true, refillMessage: nil)
-        let deadlines = events.filter(\.requiresSound).map(\.date)
+        let alerts = AlertPlanner.alerts(for: many, vibrateOnly: true, refillMessage: nil)
+        let deadlines = many.filter(\.requiresSound).map(\.date)
         #expect(!deadlines.isEmpty)
         #expect(alerts.filter(\.usesAlarm).map(\.date) == Array(deadlines.prefix(AlertPlanner.alarmLimit)))
         #expect(alerts.filter { !$0.usesAlarm }.count == AlertPlanner.notificationLimit)
@@ -29,9 +39,9 @@ import Testing
 
     @Test func withoutAlarmPermissionEverythingIsNotification() {
         let alerts = AlertPlanner.alerts(for: events, vibrateOnly: false, alarmsAvailable: false, refillMessage: nil)
-        #expect(alerts.count == AlertPlanner.notificationLimit)
         #expect(alerts.allSatisfy { !$0.usesAlarm })
         #expect(alerts.first?.date == vn(2026, 10, 2, 21))
+        #expect(AlertPlanner.alerts(for: many, vibrateOnly: false, alarmsAvailable: false, refillMessage: nil).count == AlertPlanner.notificationLimit)
     }
 
     @Test func refillLineIsAppended() {
