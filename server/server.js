@@ -1,4 +1,4 @@
-// Medly sync service: keeps the latest snapshot from the app and runs a private Telegram bot.
+// Pillot sync service: keeps the latest snapshot from the app and runs a private Telegram bot.
 // Plain Node, no dependencies. Every setting comes from environment variables, nothing secret lives in the repo.
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
@@ -136,7 +136,7 @@ function medicationStatus(m, now) {
 export function statusText(snapshot, now = Date.now()) {
   const s = normalize(snapshot);
   if (!s) return '📭 Nothing here yet. Once the app is connected with /link, its updates show up here.';
-  const title = s.name?.trim() ? `💊 <b>${esc(s.name.trim())}'s meds</b>` : "💊 <b>Medly</b>";
+  const title = s.name?.trim() ? `💊 <b>${esc(s.name.trim())}'s meds</b>` : "💊 <b>Pillot</b>";
   const blocks = s.medications.length
     ? s.medications.map((m) => medicationStatus(m, now))
     : ['No medications set up in the app yet.'];
@@ -152,7 +152,7 @@ export function changeText(previousSnapshot, nextSnapshot) {
   const previous = normalize(previousSnapshot);
   const next = normalize(nextSnapshot);
   if (!previous) {
-    return "🔗 Medly is connected! I'll let you know when doses are taken, late or missed. Try /check any time.";
+    return "🔗 Pillot is connected! I'll let you know when doses are taken, late or missed. Try /check any time.";
   }
   const name = who(next);
   const before = new Map(previous.medications.map((m) => [m.id, m]));
@@ -192,7 +192,7 @@ export function changeText(previousSnapshot, nextSnapshot) {
 }
 
 export const HELP = [
-  "💊 <b>Medly bot</b>",
+  "💊 <b>Pillot bot</b>",
   'I keep you in the loop on the meds in the app: taken, late or missed, plus a check-in every morning at 09:00 Vietnam time.',
   '',
   '/check · how things stand right now',
@@ -327,7 +327,7 @@ export function createBot({ token, chatId, store, publicUrl, apiToken, fetchImpl
         const code = `${publicUrl}#${apiToken}`;
         return say([
           '🔗 <b>Connection code</b>',
-          'In Medly, open <b>Settings → Shared tracking</b> and paste this:',
+          'In Pillot, open <b>Settings → Shared tracking</b> and paste this:',
           '',
           `<code>${esc(code)}</code>`,
           '',
@@ -402,7 +402,7 @@ export function createBot({ token, chatId, store, publicUrl, apiToken, fetchImpl
 
   /// Command menu and profile texts, set on every start so they follow the code.
   const setProfile = () => Promise.all([
-    call('setMyName', { name: 'Medly' }),
+    call('setMyName', { name: 'Pillot' }),
     call('setMyCommands', { commands: [
       { command: 'check', description: 'See how the meds are going right now' },
       { command: 'msg', description: "Leave a note on the app's Today screen" },
@@ -410,8 +410,8 @@ export function createBot({ token, chatId, store, publicUrl, apiToken, fetchImpl
       { command: 'link', description: 'Get the code that connects the app' },
       { command: 'help', description: 'What I can do' },
     ] }),
-    call('setMyShortDescription', { short_description: "Med check-ins from Medly 💊 Taken, late, skipped or missed, plus a morning summary." }),
-    call('setMyDescription', { description: "Hi! 👋 I'm the private companion bot for Medly, a medication reminder that runs on Vietnam time.\n\nI tell you when a dose is taken, late, skipped or missed, nudge you when a deadline passes with no dose reported, warn when pills run low, and send a check-in every morning at 09:00 Vietnam time. You can also leave a little note that shows up in the app.\n\nI only talk to one chat, so your data stays between the two of you." }),
+    call('setMyShortDescription', { short_description: "Med check-ins from Pillot 💊 Taken, late, skipped or missed, plus a morning summary." }),
+    call('setMyDescription', { description: "Hi! 👋 I'm the private companion bot for Pillot, a medication reminder that runs on Vietnam time.\n\nI tell you when a dose is taken, late, skipped or missed, nudge you when a deadline passes with no dose reported, warn when pills run low, and send a check-in every morning at 09:00 Vietnam time. You can also leave a little note that shows up in the app.\n\nI only talk to one chat, so your data stays between the two of you." }),
   ]);
 
   return { say, handle, handleCallback, poll, dailyReport, checkDeadlines, setProfile };

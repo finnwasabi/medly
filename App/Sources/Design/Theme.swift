@@ -1,4 +1,4 @@
-import MedlyCore
+import PillotCore
 import SwiftUI
 import UIKit
 
@@ -95,7 +95,7 @@ enum DoseStatus {
 }
 
 extension DoseStatus {
-    init(_ status: MedlyCore.DoseStatus) {
+    init(_ status: PillotCore.DoseStatus) {
         switch status {
         case .taken: self = .taken
         case .late: self = .late

@@ -1,4 +1,4 @@
-# Runs the MedlyCore tests, the server tests and an .ipa build for every PR and every push to main or develop.
+# Runs the PillotCore tests, the server tests and an .ipa build for every PR and every push to main or develop.
 # The job name `test` is the required status check in the branch rulesets; rename both together.
 name: CI
 
@@ -20,8 +20,8 @@ jobs:
           git fetch -q --depth 1 origin "$GITHUB_SHA" && git checkout -q FETCH_HEAD
       - name: Select newest Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
-      - name: MedlyCore
-        run: swift test --package-path Packages/MedlyCore
+      - name: PillotCore
+        run: swift test --package-path Packages/PillotCore
       - name: Server
         run: cd server && node --test
       - name: Build ipa

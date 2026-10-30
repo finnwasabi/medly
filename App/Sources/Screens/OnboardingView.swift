@@ -20,7 +20,7 @@ struct OnboardingView: View {
                         .font(.largeTitle.weight(.black))
                         .foregroundStyle(Palette.text)
                         .multilineTextAlignment(.center)
-                    Text(L("Medly đặt báo thức theo giờ Việt Nam, kêu cả khi máy đang im lặng hay bật Focus.", "Medly sets alarms on Vietnam time that ring even when the phone is on silent or in Focus."))
+                    Text(L("Pillot đặt báo thức theo giờ Việt Nam, kêu cả khi máy đang im lặng hay bật Focus.", "Pillot sets alarms on Vietnam time that ring even when the phone is on silent or in Focus."))
                         .font(.body)
                         .foregroundStyle(Palette.textSecondary)
                         .multilineTextAlignment(.center)

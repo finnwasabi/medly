@@ -1,7 +1,7 @@
 import AlarmKit
 import Foundation
 import Network
-import MedlyCore
+import PillotCore
 import Observation
 import SwiftUI
 import WidgetKit
@@ -322,7 +322,7 @@ final class AppModel {
             if medications.isEmpty || UserDefaults.standard.string(forKey: "screen") != nil {
                 scheduleIssue = nil
             } else if !alarmsAvailable {
-                scheduleIssue = L("Chưa có quyền báo thức nên máy im lặng hay bật Focus sẽ không kêu. Bật trong Cài đặt > Medly.", "Alarms are not allowed, so nothing rings on silent or in Focus. Turn them on in Settings > Medly.")
+                scheduleIssue = L("Chưa có quyền báo thức nên máy im lặng hay bật Focus sẽ không kêu. Bật trong Cài đặt > Pillot.", "Alarms are not allowed, so nothing rings on silent or in Focus. Turn them on in Settings > Pillot.")
             } else if failures > 0 {
                 scheduleIssue = L("Có \(failures) lần nhắc không hẹn được. Mở lại app để thử lại.", "\(failures) reminders could not be scheduled. Reopen the app to retry.")
             } else {

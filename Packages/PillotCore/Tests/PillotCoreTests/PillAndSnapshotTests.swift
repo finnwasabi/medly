@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MedlyCore
+@testable import PillotCore
 
 @Suite struct PillCounterTests {
     @Test func countDownToZero() {

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MedlyCore
+@testable import PillotCore
 
 /// Changes the process time zone (like a user changing the phone's) and compares results.
 /// Serialized because it changes global state.

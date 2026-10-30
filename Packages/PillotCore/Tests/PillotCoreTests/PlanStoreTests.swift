@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MedlyCore
+@testable import PillotCore
 
 @Suite struct PlanStoreTests {
     /// A fresh temporary directory per test; the subdirectory does not exist yet, which also tests creating it.

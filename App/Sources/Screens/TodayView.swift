@@ -1,4 +1,4 @@
-import MedlyCore
+import PillotCore
 import SwiftUI
 
 struct TodayView: View {

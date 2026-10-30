@@ -8,8 +8,8 @@ import os
 import sys
 
 ipa, version, build, url, date = sys.argv[1:6]
-repo = "https://github.com/finnwasabi/medly"
-icon = "https://raw.githubusercontent.com/finnwasabi/medly/main/docs/icon.png"
+repo = "https://github.com/finnwasabi/pillot"
+icon = "https://raw.githubusercontent.com/finnwasabi/pillot/main/docs/icon.png"
 description = (
     "A cute medication reminder that always runs on Vietnam time, whatever time zone the phone is in. "
     "Several medications, each with its own times, maximum gap, days off and pill count. "
@@ -18,7 +18,7 @@ description = (
 )
 
 source = {
-    "name": "Medly",
+    "name": "Pillot",
     "identifier": "io.github.finnwasabi.nersdaily.source",
     "subtitle": "Medication reminders on Vietnam time",
     "description": description,
@@ -27,7 +27,7 @@ source = {
     "tintColor": "#FF8FC0",
     "apps": [
         {
-            "name": "Medly",
+            "name": "Pillot",
             "bundleIdentifier": "io.github.finnwasabi.nersdaily",
             "developerName": "Lê Nhật Tùng",
             "subtitle": "Medication reminders on Vietnam time",

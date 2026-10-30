@@ -3,7 +3,7 @@ import SwiftUI
 import UserNotifications
 
 @main
-struct MedlyApp: App {
+struct PillotApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var model = AppModel.shared
     @State private var needsOnboarding = AlarmManager.shared.authorizationState == .notDetermined

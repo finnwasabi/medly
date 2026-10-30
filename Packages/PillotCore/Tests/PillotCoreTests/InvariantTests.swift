@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MedlyCore
+@testable import PillotCore
 
 @Suite struct InvariantTests {
     /// Seeded random histories: after the last take there is always a ringing alarm

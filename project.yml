@@ -1,4 +1,4 @@
-name: Medly
+name: Pillot
 options:
   bundleIdPrefix: io.github.finnwasabi
   deploymentTarget:
@@ -12,15 +12,15 @@ settings:
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
 packages:
-  MedlyCore:
-    path: Packages/MedlyCore
+  PillotCore:
+    path: Packages/PillotCore
 targets:
-  Medly:
+  Pillot:
     type: application
     platform: iOS
     dependencies:
-      - package: MedlyCore
-      - target: MedlyWidget
+      - package: PillotCore
+      - target: PillotWidget
     sources:
       - App/Sources
       - App/Shared
@@ -28,7 +28,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: "Medly"
+        CFBundleDisplayName: "Pillot"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDevelopmentRegion: en
@@ -36,9 +36,9 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSSupportsLiveActivities: true
-        NSAlarmKitUsageDescription: "Medly sets alarms to remind you to take your medication on time, even when your phone is on silent."
+        NSAlarmKitUsageDescription: "Pillot sets alarms to remind you to take your medication on time, even when your phone is on silent."
     entitlements:
-      path: App/Medly.entitlements
+      path: App/Pillot.entitlements
       properties:
         com.apple.security.application-groups: [group.io.github.finnwasabi.nersdaily]
     settings:
@@ -47,13 +47,13 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-  MedlyWidget:
+  PillotWidget:
     type: app-extension
     platform: iOS
     dependencies:
-      - package: MedlyCore
+      - package: PillotCore
     entitlements:
-      path: App/Widget/MedlyWidget.entitlements
+      path: App/Widget/PillotWidget.entitlements
       properties:
         com.apple.security.application-groups: [group.io.github.finnwasabi.nersdaily]
     sources:
@@ -62,7 +62,7 @@ targets:
     info:
       path: App/Widget/Info.plist
       properties:
-        CFBundleDisplayName: "Medly"
+        CFBundleDisplayName: "Pillot"
         CFBundleDevelopmentRegion: en
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
@@ -74,7 +74,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
 schemes:
-  Medly:
+  Pillot:
     build:
       targets:
-        Medly: all
+        Pillot: all

@@ -1,4 +1,4 @@
-import MedlyCore
+import PillotCore
 import SwiftUI
 
 /// The list of medications. Each one has its own times, doses per day, maximum gap and pill count.

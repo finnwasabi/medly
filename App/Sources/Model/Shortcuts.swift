@@ -1,5 +1,5 @@
 import AppIntents
-import MedlyCore
+import PillotCore
 
 /// "I took my meds" for Siri, Shortcuts and Spotlight: marks every medication that is due now.
 /// Runs in the app's process, which also reschedules the alarms.
@@ -21,7 +21,7 @@ struct TakeDueMedicationsIntent: AppIntent {
     }
 }
 
-struct MedlyShortcuts: AppShortcutsProvider {
+struct PillotShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: TakeDueMedicationsIntent(),

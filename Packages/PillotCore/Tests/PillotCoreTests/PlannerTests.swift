@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MedlyCore
+@testable import PillotCore
 
 @Suite struct PlannerTests {
     let settings = ReminderSettings()

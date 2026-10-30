@@ -1,4 +1,4 @@
-import MedlyCore
+import PillotCore
 import SwiftUI
 
 struct HistoryView: View {
@@ -112,7 +112,7 @@ struct HistoryView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func calendarCard(days: [Date: MedlyCore.DoseStatus], now: Date) -> some View {
+    private func calendarCard(days: [Date: PillotCore.DoseStatus], now: Date) -> some View {
         let today = calendar.startOfDay(for: now)
         let month = calendar.date(byAdding: .month, value: monthOffset, to: calendar.date(from: calendar.dateComponents([.year, .month], from: now))!)!
         let parts = calendar.dateComponents([.year, .month], from: month)
