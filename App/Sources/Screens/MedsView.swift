@@ -6,6 +6,8 @@ struct MedsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.editMedication) private var editMedication
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Half the cap height of the guide's body text, so a step number sits centred on the first line at any text size.
+    @ScaledMetric(relativeTo: .body) private var halfCapHeight: CGFloat = 6
 
     var body: some View {
         Group {
@@ -61,11 +63,13 @@ struct MedsView: View {
             Text(L("Bắt đầu từ đây", "Start here"))
                 .font(.title3.weight(.black))
             ForEach(steps, id: \.0) { number, text in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(number)
                         .font(.headline.weight(.black).monospacedDigit())
-                        .frame(width: 28, height: 28)
+                        .frame(width: 30, height: 30)
                         .neo(Palette.surfaceOnFill, radius: 8, shadow: 0)
+                        // Centre the box on the middle of the first line's capitals instead of sitting on its baseline.
+                        .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + halfCapHeight }
                     Text(text)
                         .font(.body.weight(.semibold))
                         .frame(maxWidth: .infinity, alignment: .leading)
