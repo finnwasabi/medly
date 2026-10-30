@@ -28,6 +28,27 @@ enum Palette {
     static let primary = pink
 }
 
+/// The selection pill of a row of equal-width items, drawn behind them and moved by offset, so it always slides
+/// under the labels.
+struct SlidingPill: View {
+    let index: Int
+    let count: Int
+    let spacing: CGFloat
+    let radius: CGFloat
+    let lineWidth: CGFloat
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = (proxy.size.width - spacing * CGFloat(count - 1)) / CGFloat(max(1, count))
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(Palette.yellow)
+                .strokeBorder(Palette.ink, lineWidth: lineWidth)
+                .frame(width: width)
+                .offset(x: CGFloat(index) * (width + spacing))
+        }
+    }
+}
+
 /// Motion for small state changes: quick, a touch of spring, never in the way. With Reduce Motion, changes are instant.
 enum Motion {
     static let snappy = Animation.snappy(duration: 0.3, extraBounce: 0.06)
@@ -286,7 +307,6 @@ struct NeoToggleStyle: ToggleStyle {
 struct NeoSegmented<Value: Hashable>: View {
     let options: [(value: Value, label: String)]
     @Binding var selection: Value
-    @Namespace private var pill
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -301,19 +321,16 @@ struct NeoSegmented<Value: Hashable>: View {
                         .minimumScaleFactor(0.8)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, minHeight: 40)
-                        .background {
-                            // One pill that slides to the selected option.
-                            if selected {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(Palette.yellow)
-                                    .strokeBorder(Palette.ink, lineWidth: Neo.thinBorder)
-                                    .matchedGeometryEffect(id: "pill", in: pill)
-                            }
-                        }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        // One pill behind every label that slides to the selection.
+        .background {
+            if let index = options.firstIndex(where: { $0.value == selection }) {
+                SlidingPill(index: index, count: options.count, spacing: 6, radius: 10, lineWidth: Neo.thinBorder)
             }
         }
         .padding(5)
