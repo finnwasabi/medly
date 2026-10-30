@@ -25,6 +25,40 @@ public struct PausePeriod: Codable, Equatable, Sendable {
     public func contains(_ date: Date) -> Bool { date >= start && date < end }
 }
 
+/// Days on and days off, like a 21 + 7 pack. No reminders and no misses on the days off.
+public struct DoseCycle: Codable, Equatable, Sendable {
+    public var activeDays: Int
+    public var breakDays: Int
+    /// The first day on of a cycle, as the start of that Vietnam day.
+    public var startDay: Date
+
+    public init(activeDays: Int = 21, breakDays: Int = 7, startDay: Date) {
+        self.activeDays = max(1, activeDays)
+        self.breakDays = max(1, breakDays)
+        self.startDay = VietnamClock.calendar.startOfDay(for: startDay)
+    }
+
+    /// True on a day off. Days before `startDay` count as days on.
+    public func isBreak(_ date: Date) -> Bool {
+        let days = Self.vietnamDay(date) - Self.vietnamDay(startDay)
+        return days >= 0 && days % (activeDays + breakDays) >= activeDays
+    }
+
+    /// Days since 1970 in Vietnam time. Plain arithmetic: Vietnam is UTC+7 with no daylight saving, and this runs for
+    /// every planned reminder, where a Calendar call per date made planning twenty times slower.
+    static func vietnamDay(_ date: Date) -> Int {
+        Int(((date.timeIntervalSince1970 + 7 * 3600) / 86_400).rounded(.down))
+    }
+
+    /// The start of the next day on, if `date` is on a day off.
+    public func breakEnd(after date: Date) -> Date? {
+        guard isBreak(date) else { return nil }
+        var day = VietnamClock.calendar.startOfDay(for: date)
+        while isBreak(day) { day = VietnamClock.calendar.date(byAdding: .day, value: 1, to: day)! }
+        return day
+    }
+}
+
 /// Reminder settings. All intervals are in seconds.
 public struct ReminderSettings: Codable, Equatable, Sendable {
     /// Main time in Vietnam time. With several doses a day, the first one; the others follow every `period`.
@@ -58,6 +92,8 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
     public var refillReminder: RefillReminder
     /// Pauses, including past ones, so nothing inside them counts as missed.
     public var pauses: [PausePeriod]
+    /// Days on and off; `nil` means every day.
+    public var cycle: DoseCycle?
 
     public init(
         mainHour: Int = 21,
@@ -76,7 +112,8 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         overdueBurst: TimeInterval = 3 * 3600,
         pills: PillCounter? = nil,
         refillReminder: RefillReminder = RefillReminder(),
-        pauses: [PausePeriod] = []
+        pauses: [PausePeriod] = [],
+        cycle: DoseCycle? = nil
     ) {
         self.mainHour = mainHour
         self.mainMinute = mainMinute
@@ -95,6 +132,7 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         self.pills = pills
         self.refillReminder = refillReminder
         self.pauses = pauses
+        self.cycle = cycle
     }
 
     /// Divisors of 24, so the doses fall on the same clock times every day.
@@ -133,5 +171,6 @@ public struct ReminderSettings: Codable, Equatable, Sendable {
         pills = try c.decodeIfPresent(PillCounter.self, forKey: .pills)
         refillReminder = try c.decodeIfPresent(RefillReminder.self, forKey: .refillReminder) ?? d.refillReminder
         pauses = try c.decodeIfPresent([PausePeriod].self, forKey: .pauses) ?? d.pauses
+        cycle = try c.decodeIfPresent(DoseCycle.self, forKey: .cycle)
     }
 }

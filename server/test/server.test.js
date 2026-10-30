@@ -23,11 +23,11 @@ const pill = {
 };
 
 // The sample from docs/spec.md.
-const spec = { schemaVersion: 2, name: 'Ner', updatedAt: '2026-10-27T14:03:00Z', medications: [pill] };
+const spec = { schemaVersion: 2, name: 'Mai', updatedAt: '2026-10-27T14:03:00Z', medications: [pill] };
 
 // The version 1 shape sent by app versions before 0.2.0.
 const v1 = {
-  schemaVersion: 1, name: 'Ner', updatedAt: '2026-10-27T14:03:00Z', lastTakenAt: '2026-10-27T14:03:00Z',
+  schemaVersion: 1, name: 'Mai', updatedAt: '2026-10-27T14:03:00Z', lastTakenAt: '2026-10-27T14:03:00Z',
   nextDueAt: '2026-10-28T14:00:00Z', deadlineAt: '2026-10-28T14:03:00Z', daysTaken: 12, missedCount: 1, lateCount: 0,
   madeUpCount: 0, pillsTotal: 28, pillsRemaining: 16, refillReminder: { enabled: true, daysBefore: 7 }, pausedUntil: null,
 };
@@ -115,7 +115,7 @@ test('POST keeps only the newest snapshot and reports stale ones', async () => {
 
     // A new dose is reported once; reopening the app with nothing new stays quiet.
     await request('POST', later(spec, '2026-10-28T14:01:00Z', { lastTakenAt: '2026-10-28T14:01:00Z', pillsRemaining: 15 }));
-    assert.equal(sent.at(-1), '✅ Ner took <b>Daily pill</b> at 21:01 · 15 pills left');
+    assert.equal(sent.at(-1), '✅ Mai took <b>Daily pill</b> at 21:01 · 15 pills left');
     await request('POST', later(spec, '2026-10-28T15:00:00Z', { lastTakenAt: '2026-10-28T14:01:00Z', pillsRemaining: 15 }));
     assert.equal(sent.length, 2);
   });
@@ -139,24 +139,24 @@ test('change text covers miss, late, make-up, pause, refill, added and removed',
   const text = changeText(before, next);
   assert.match(text, /🟡 <b>Daily pill<\/b> was taken late \(1 late so far\)\./);
   assert.match(text, /🔴 A dose of <b>Daily pill<\/b> was missed \(1 not made up\)\./);
-  assert.match(text, /🔵 Ner made up a missed <b>Daily pill<\/b> dose \(1 still to make up\)\./);
+  assert.match(text, /🔵 Mai made up a missed <b>Daily pill<\/b> dose \(1 still to make up\)\./);
   assert.match(text, /⏸️ <b>Daily pill<\/b> reminders are paused until 21:00 · Fri 30\/10\./);
   assert.match(text, /🛒 <b>Daily pill<\/b> is running low: 7 pills left\./);
-  assert.match(text, /🆕 Ner added <b>Zinc<\/b> \(2× a day\)\./);
-  assert.match(text, /🗑️ Ner removed <b>Iron &lt;3<\/b>\./);
+  assert.match(text, /🆕 Mai added <b>Zinc<\/b> \(2× a day\)\./);
+  assert.match(text, /🗑️ Mai removed <b>Iron &lt;3<\/b>\./);
   assert.equal(changeText(spec, later(spec, '2026-10-27T15:00:00Z')), null);
 });
 
 test('undo is reported as undo, not as a new dose at the older time', () => {
   const undone = later(spec, '2026-10-27T14:05:00Z', { lastTakenAt: '2026-10-26T14:01:00Z' });
-  assert.equal(changeText(spec, undone), '↩️ Ner undid or edited the last <b>Daily pill</b> dose.');
+  assert.equal(changeText(spec, undone), '↩️ Mai undid or edited the last <b>Daily pill</b> dose.');
 });
 
 test('names come from the app, with a neutral word without one, and are escaped', () => {
   const unnamed = { ...spec, name: null };
   assert.match(changeText(unnamed, later(unnamed, '2026-10-28T14:01:00Z', { lastTakenAt: '2026-10-28T14:01:00Z' })), /^✅ They took/);
   assert.match(statusText({ ...spec, name: 'Mai' }), /^💊 <b>Mai's meds<\/b>/);
-  assert.match(statusText(unnamed), /^💊 <b>Ner's Daily<\/b>/);
+  assert.match(statusText(unnamed), /^💊 <b>Medly<\/b>/);
   assert.match(statusText({ ...spec, name: '<b>x</b>' }), /&lt;b&gt;x&lt;\/b&gt;'s meds/);
   assert.equal(esc('a & <b>'), 'a &amp; &lt;b&gt;');
 });
@@ -186,7 +186,7 @@ test('bot commands answer in its chat with HTML, a copy button and a refresh but
 
   await bot.handle('/msg Take it and sleep <3');
   assert.equal(store.get().message, 'Take it and sleep <3');
-  assert.match(last().text, /Saved! Ner will see it.*\n<i>Take it and sleep &lt;3<\/i>/);
+  assert.match(last().text, /Saved! Mai will see it.*\n<i>Take it and sleep &lt;3<\/i>/);
   assert.equal(last().parse_mode, 'HTML');
   assert.equal(last().chat_id, '42');
   await bot.handle('/msg');
@@ -237,10 +237,41 @@ test('profile sets commands and descriptions', async () => {
   const { calls, fetchImpl } = fakeTelegram();
   const bot = createBot({ token: 't', chatId: '42', store: tempStore(), publicUrl: 'https://x/ners', apiToken: 'a', fetchImpl });
   await bot.setProfile();
-  assert.deepEqual(calls.map((c) => c.method).sort(), ['setMyCommands', 'setMyDescription', 'setMyShortDescription']);
+  assert.deepEqual(calls.map((c) => c.method).sort(), ['setMyCommands', 'setMyDescription', 'setMyName', 'setMyShortDescription']);
   const commands = calls.find((c) => c.method === 'setMyCommands').body.commands.map((c) => c.command);
   assert.deepEqual(commands, ['check', 'msg', 'clearmsg', 'link', 'help']);
   assert.ok(calls.find((c) => c.method === 'setMyShortDescription').body.short_description.length <= 120);
   assert.ok(calls.find((c) => c.method === 'setMyDescription').body.description.length <= 512);
   assert.equal(normalize(null), null);
+});
+
+test('skips are reported and counted', () => {
+  const next = later(spec, '2026-10-28T15:00:00Z', { skippedCount: 1 });
+  assert.match(changeText(spec, next), /⏭️ Mai skipped a dose of <b>Daily pill<\/b> on purpose\./);
+  assert.match(statusText(next, Date.parse('2026-10-28T16:00:00Z')), /· 1 skipped/);
+  assert.equal(validateSnapshot(next), null);
+  assert.match(validateSnapshot(later(spec, spec.updatedAt, { skippedCount: -1 })), /skippedCount/);
+});
+
+test('a passed deadline with no dose reported nudges the partner once', async () => {
+  const store = tempStore();
+  store.set({ snapshot: spec }); // deadline 2026-10-28T14:03:00Z, last taken before the dose was due
+  const { calls, fetchImpl } = fakeTelegram();
+  const bot = createBot({ token: 't', chatId: '42', store, publicUrl: 'https://x/ners', apiToken: 'a', fetchImpl });
+  await bot.checkDeadlines(Date.parse('2026-10-28T14:10:00Z')); // within the 15 minute tolerance
+  assert.equal(calls.length, 0);
+  await bot.checkDeadlines(Date.parse('2026-10-28T14:20:00Z'));
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].body.text, /⏰ <b>Daily pill<\/b> passed its deadline at 21:03 and no dose has come in yet\.\nThe phone may just be offline, but a gentle nudge to Mai could help/);
+  await bot.checkDeadlines(Date.parse('2026-10-28T15:00:00Z'));
+  assert.equal(calls.length, 1);
+  // A new deadline after the next sync can nudge again; a taken or paused medication does not.
+  store.set({ snapshot: later(spec, '2026-10-28T15:00:00Z', { deadlineAt: '2026-10-29T14:03:00Z', nextDueAt: '2026-10-29T14:00:00Z' }) });
+  await bot.checkDeadlines(Date.parse('2026-10-29T14:30:00Z'));
+  assert.equal(calls.length, 2);
+  store.set({ snapshot: later(spec, '2026-10-29T15:00:00Z', { deadlineAt: '2026-10-30T14:03:00Z', nextDueAt: '2026-10-30T14:00:00Z', lastTakenAt: '2026-10-30T14:01:00Z' }) });
+  await bot.checkDeadlines(Date.parse('2026-10-30T14:30:00Z'));
+  store.set({ snapshot: later(spec, '2026-10-29T16:00:00Z', { deadlineAt: '2026-10-31T14:03:00Z', pausedUntil: '2026-11-02T00:00:00Z' }) });
+  await bot.checkDeadlines(Date.parse('2026-10-31T14:30:00Z'));
+  assert.equal(calls.length, 2);
 });

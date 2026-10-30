@@ -15,7 +15,7 @@
 ## Checklist
 
 - [ ] The base branch is `develop`
-- [ ] `swift test --package-path Packages/NersCore` passes
+- [ ] `swift test --package-path Packages/MedlyCore` passes
 - [ ] `cd server && node --test` passes (if `server/` changed)
 - [ ] Every new user-facing string has Vietnamese and English (`L("…", "…")`)
 - [ ] Scheduling goes through Vietnam time and absolute dates only

@@ -1,4 +1,4 @@
-import NersCore
+import MedlyCore
 import SwiftUI
 
 /// The very first screen: pick a language. Written in both languages since we do not know which one the user reads yet.

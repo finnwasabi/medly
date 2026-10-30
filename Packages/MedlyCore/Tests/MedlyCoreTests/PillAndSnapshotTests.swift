@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import NersCore
+@testable import MedlyCore
 
 @Suite struct PillCounterTests {
     @Test func countDownToZero() {
@@ -61,6 +61,7 @@ import Testing
           "missedCount": 1,
           "lateCount": 0,
           "madeUpCount": 0,
+          "skippedCount": 0,
           "pillsTotal": 28,
           "pillsRemaining": 16,
           "refillReminder": { "enabled": true, "daysBefore": 7 },
@@ -96,7 +97,7 @@ import Testing
         var medication = Medication(name: "B", settings: ReminderSettings(refillReminder: RefillReminder(enabled: false, daysBefore: 5)))
         medication.planner.pause(days: 2, now: vn(2026, 10, 27, 8))
         let now = vn(2026, 10, 27, 8).addingTimeInterval(0.75)
-        let snapshot = Snapshot(name: "Ner", medications: [medication], now: now)
+        let snapshot = Snapshot(name: "Mai", medications: [medication], now: now)
         let data = try snapshot.jsonData()
         let json = try object(data)
         let med = try #require((json["medications"] as? [NSDictionary])?.first)
@@ -106,7 +107,7 @@ import Testing
         #expect(med["pausedUntil"] as? String == "2026-10-29T01:00:00Z")
         #expect(json["updatedAt"] as? String == "2026-10-27T01:00:00Z")
         #expect(json.count == 4)
-        #expect(med.count == 14)
+        #expect(med.count == 15)
 
         let decoded = try Snapshot.decode(from: data)
         #expect(decoded == snapshot)

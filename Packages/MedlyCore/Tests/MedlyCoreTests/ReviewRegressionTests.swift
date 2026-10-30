@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import NersCore
+@testable import MedlyCore
 
 /// Regressions found in review.
 @Suite struct ReviewRegressionTests {

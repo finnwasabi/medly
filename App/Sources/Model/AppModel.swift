@@ -1,9 +1,10 @@
 import AlarmKit
 import Foundation
 import Network
-import NersCore
+import MedlyCore
 import Observation
 import SwiftUI
+import WidgetKit
 
 /// App state: loads and saves data and reschedules reminders after every change.
 /// Shared by the screens, the alarm App Intent and the notification action.
@@ -24,6 +25,8 @@ final class AppModel {
     var language: Language = AppLanguage.current {
         didSet {
             UserDefaults.standard.set(language.rawValue, forKey: AppLanguage.key)
+            SharedStorage.defaults?.set(language.rawValue, forKey: AppLanguage.key)
+            WidgetCenter.shared.reloadAllTimelines()
             Task { await resync() }
         }
     }
@@ -113,7 +116,17 @@ final class AppModel {
 
     init() {
         let directory = URL.applicationSupportDirectory
-        store = PlanStore(url: directory.appending(path: "state.json"))
+        let privateURL = directory.appending(path: "state.json")
+        // Move the data into the App Group once, so the widget can read it. Without a group it stays where it was.
+        if let shared = SharedStorage.sharedStateURL {
+            if !FileManager.default.fileExists(atPath: shared.path), FileManager.default.fileExists(atPath: privateURL.path) {
+                try? FileManager.default.copyItem(at: privateURL, to: shared)
+            }
+            store = PlanStore(url: FileManager.default.fileExists(atPath: shared.path) || !FileManager.default.fileExists(atPath: privateURL.path) ? shared : privateURL)
+        } else {
+            store = PlanStore(url: privateURL)
+        }
+        SharedStorage.defaults?.set(AppLanguage.current.rawValue, forKey: AppLanguage.key)
         vibrateOnly = UserDefaults.standard.bool(forKey: "vibrateOnly")
         do {
             medications = try store.load()
@@ -202,6 +215,45 @@ final class AppModel {
         await resync()
     }
 
+    /// "Skip this dose": not a miss, uses no pill. Stops the medication's ringing or snoozed alarm.
+    func skip(_ id: UUID) {
+        update(id, stopsAlarms: true) { $0.planner.skip(at: .now) }
+    }
+
+    // MARK: Backup
+
+    /// When a backup was last saved from this phone.
+    private(set) var lastBackup: Date? = UserDefaults.standard.object(forKey: "lastBackup") as? Date
+
+    /// Everything a restore needs, except the connection code (a secret, /link gives it again).
+    func makeBackup(now: Date = .now) -> Backup {
+        Backup(createdAt: now, medications: medications, preferences: [
+            "userName": userName, "partnerName": partnerName, "language": language.rawValue, "theme": theme.rawValue,
+            "vibrateOnly": String(vibrateOnly), "snoozeMinutes": String(snoozeMinutes),
+        ])
+    }
+
+    func backupSaved(at date: Date = .now) {
+        lastBackup = date
+        UserDefaults.standard.set(date, forKey: "lastBackup")
+    }
+
+    /// Replaces every medication and the preferences with the backup's, then reschedules.
+    func restore(_ backup: Backup) {
+        let replaced = Set(medications.map(\.id))
+        medications = Array(backup.medications.prefix(Medication.limit))
+        let p = backup.preferences
+        if let value = p["userName"] { userName = value }
+        if let value = p["partnerName"] { partnerName = value }
+        if let value = p["theme"].flatMap(AppTheme.init(rawValue:)) { theme = value }
+        if let value = p["vibrateOnly"].flatMap(Bool.init) { vibrateOnly = value }
+        if let value = p["snoozeMinutes"].flatMap(Int.init) { snoozeMinutes = value }
+        persist()
+        // The language last: it rebuilds every screen.
+        if let value = p["language"].flatMap(Language.init(rawValue:)), value != language { language = value }
+        Task { await resync(cancelActiveFor: replaced.union(medications.map(\.id))) }
+    }
+
     /// "Mark made up" for a missed dose.
     func markMadeUp(_ id: UUID, missedAt scheduledAt: Date) {
         update(id) { $0.planner.markMadeUp(missedAt: scheduledAt, at: .now) }
@@ -232,6 +284,7 @@ final class AppModel {
     private func persist() {
         do {
             try store.save(medications)
+            WidgetCenter.shared.reloadAllTimelines()
         } catch {
             dataIssue = L("Không lưu được dữ liệu: \(error.localizedDescription)", "Could not save your data: \(error.localizedDescription)")
         }
@@ -269,7 +322,7 @@ final class AppModel {
             if medications.isEmpty || UserDefaults.standard.string(forKey: "screen") != nil {
                 scheduleIssue = nil
             } else if !alarmsAvailable {
-                scheduleIssue = L("Chưa có quyền báo thức nên máy im lặng hay bật Focus sẽ không kêu. Bật trong Cài đặt > Ner's Daily.", "Alarms are not allowed, so nothing rings on silent or in Focus. Turn them on in Settings > Ner's Daily.")
+                scheduleIssue = L("Chưa có quyền báo thức nên máy im lặng hay bật Focus sẽ không kêu. Bật trong Cài đặt > Medly.", "Alarms are not allowed, so nothing rings on silent or in Focus. Turn them on in Settings > Medly.")
             } else if failures > 0 {
                 scheduleIssue = L("Có \(failures) lần nhắc không hẹn được. Mở lại app để thử lại.", "\(failures) reminders could not be scheduled. Reopen the app to retry.")
             } else {

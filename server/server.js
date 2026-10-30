@@ -1,4 +1,4 @@
-// Ner's Daily sync service: keeps the latest snapshot from the app and runs a private Telegram bot.
+// Medly sync service: keeps the latest snapshot from the app and runs a private Telegram bot.
 // Plain Node, no dependencies. Every setting comes from environment variables, nothing secret lives in the repo.
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
@@ -15,6 +15,8 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DOSES_PER_DAY = [1, 2, 3, 4, 6];
 const MESSAGE_LIMIT = 300;
 const MEDICATION_LIMIT = 30;
+/// Same as the app's late tolerance: a dose this soon after the deadline is still on time.
+const NUDGE_AFTER_MS = 15 * 60 * 1000;
 
 // MARK: Formatting (Vietnam time, fixed UTC+7 with no daylight saving)
 
@@ -104,6 +106,8 @@ export function validateSnapshot(s) {
     for (const key of ['takenCount', 'missedCount', 'lateCount', 'madeUpCount']) {
       if (!isCount(m[key])) return `medications[${i}].${key} must be a non-negative integer`;
     }
+    // Sent since 0.3.0.
+    if (m.skippedCount !== undefined && !isCount(m.skippedCount)) return `medications[${i}].skippedCount must be a non-negative integer`;
     const problem = validateMedicationFields(m, { requireId: true });
     if (problem) return `medications[${i}].${problem}`;
   }
@@ -123,7 +127,7 @@ function medicationStatus(m, now) {
     lines.push(`⏰ Next ${vnTime(m.nextDueAt)} · ${vnDay(m.nextDueAt)}, deadline ${vnTime(m.deadlineAt)}`);
   }
   const notMadeUp = m.missedCount - m.madeUpCount;
-  lines.push(`📊 ${m.takenCount} taken · ${m.lateCount} late · ${notMadeUp} missed${m.madeUpCount ? ` · ${m.madeUpCount} made up` : ''}`);
+  lines.push(`📊 ${m.takenCount} taken · ${m.lateCount} late · ${notMadeUp} missed${m.madeUpCount ? ` · ${m.madeUpCount} made up` : ''}${m.skippedCount ? ` · ${m.skippedCount} skipped` : ''}`);
   if (m.pillsTotal != null) lines.push(`💊 ${m.pillsRemaining} of ${m.pillsTotal} pills left${needsRefill(m) ? ' · 🛒 time to buy more' : ''}`);
   return lines.join('\n');
 }
@@ -132,7 +136,7 @@ function medicationStatus(m, now) {
 export function statusText(snapshot, now = Date.now()) {
   const s = normalize(snapshot);
   if (!s) return '📭 Nothing here yet. Once the app is connected with /link, its updates show up here.';
-  const title = s.name?.trim() ? `💊 <b>${esc(s.name.trim())}'s meds</b>` : "💊 <b>Ner's Daily</b>";
+  const title = s.name?.trim() ? `💊 <b>${esc(s.name.trim())}'s meds</b>` : "💊 <b>Medly</b>";
   const blocks = s.medications.length
     ? s.medications.map((m) => medicationStatus(m, now))
     : ['No medications set up in the app yet.'];
@@ -148,7 +152,7 @@ export function changeText(previousSnapshot, nextSnapshot) {
   const previous = normalize(previousSnapshot);
   const next = normalize(nextSnapshot);
   if (!previous) {
-    return "🔗 Ner's Daily is connected! I'll let you know when doses are taken, late or missed. Try /check any time.";
+    return "🔗 Medly is connected! I'll let you know when doses are taken, late or missed. Try /check any time.";
   }
   const name = who(next);
   const before = new Map(previous.medications.map((m) => [m.id, m]));
@@ -177,6 +181,7 @@ export function changeText(previousSnapshot, nextSnapshot) {
     if (m.madeUpCount > p.madeUpCount) {
       parts.push(`🔵 ${name} made up a missed ${medName(m)} dose (${m.missedCount - m.madeUpCount} still to make up).`);
     }
+    if ((m.skippedCount ?? 0) > (p.skippedCount ?? 0)) parts.push(`⏭️ ${name} skipped a dose of ${medName(m)} on purpose.`);
     if (m.pausedUntil && m.pausedUntil !== p.pausedUntil) {
       parts.push(`⏸️ ${medName(m)} reminders are paused until ${vnTime(m.pausedUntil)} · ${vnDay(m.pausedUntil)}.`);
     }
@@ -187,7 +192,7 @@ export function changeText(previousSnapshot, nextSnapshot) {
 }
 
 export const HELP = [
-  "💊 <b>Ner's Daily bot</b>",
+  "💊 <b>Medly bot</b>",
   'I keep you in the loop on the meds in the app: taken, late or missed, plus a check-in every morning at 09:00 Vietnam time.',
   '',
   '/check · how things stand right now',
@@ -322,7 +327,7 @@ export function createBot({ token, chatId, store, publicUrl, apiToken, fetchImpl
         const code = `${publicUrl}#${apiToken}`;
         return say([
           '🔗 <b>Connection code</b>',
-          'In Ner\'s Daily, open <b>Settings → Shared tracking</b> and paste this:',
+          'In Medly, open <b>Settings → Shared tracking</b> and paste this:',
           '',
           `<code>${esc(code)}</code>`,
           '',
@@ -377,8 +382,27 @@ export function createBot({ token, chatId, store, publicUrl, apiToken, fetchImpl
     await say(`☀️ <b>Good morning!</b> Here's today's check-in.\n\n${statusText(store.get().snapshot, now)}`, { reply_markup: refreshButton });
   };
 
+  /// A heads-up to the partner when a dose is past its deadline and the app has not reported it. The snapshot carries
+  /// the deadline, so this only compares times; the phone may just be offline, and the message says so. Once per deadline.
+  const checkDeadlines = async (now = Date.now()) => {
+    const s = normalize(store.get().snapshot);
+    if (!s) return;
+    const nudged = { ...(store.get().nudged ?? {}) };
+    const late = s.medications.filter((m) => {
+      const resting = m.pausedUntil && Date.parse(m.pausedUntil) > now;
+      const reported = m.lastTakenAt && Date.parse(m.lastTakenAt) >= Date.parse(m.nextDueAt);
+      return !resting && !reported && now > Date.parse(m.deadlineAt) + NUDGE_AFTER_MS && nudged[m.id] !== m.deadlineAt;
+    });
+    if (!late.length) return;
+    for (const m of late) nudged[m.id] = m.deadlineAt;
+    store.set({ nudged });
+    const lines = late.map((m) => `⏰ ${medName(m)} passed its deadline at ${vnTime(m.deadlineAt)} and no dose has come in yet.`);
+    await say(`${lines.join('\n')}\nThe phone may just be offline, but a gentle nudge to ${who(s)} could help 💛`, { reply_markup: refreshButton });
+  };
+
   /// Command menu and profile texts, set on every start so they follow the code.
   const setProfile = () => Promise.all([
+    call('setMyName', { name: 'Medly' }),
     call('setMyCommands', { commands: [
       { command: 'check', description: 'See how the meds are going right now' },
       { command: 'msg', description: "Leave a note on the app's Today screen" },
@@ -386,11 +410,11 @@ export function createBot({ token, chatId, store, publicUrl, apiToken, fetchImpl
       { command: 'link', description: 'Get the code that connects the app' },
       { command: 'help', description: 'What I can do' },
     ] }),
-    call('setMyShortDescription', { short_description: "Med check-ins from Ner's Daily 💊 Taken, late or missed, plus a morning summary." }),
-    call('setMyDescription', { description: "Hi! 👋 I'm the private companion bot for Ner's Daily, a pill reminder that runs on Vietnam time.\n\nI tell you when a dose is taken, late or missed, when pills run low, and send a check-in every morning at 09:00 Vietnam time. You can also leave a little note that shows up in the app.\n\nI only talk to one chat, so your data stays between the two of you." }),
+    call('setMyShortDescription', { short_description: "Med check-ins from Medly 💊 Taken, late, skipped or missed, plus a morning summary." }),
+    call('setMyDescription', { description: "Hi! 👋 I'm the private companion bot for Medly, a medication reminder that runs on Vietnam time.\n\nI tell you when a dose is taken, late, skipped or missed, nudge you when a deadline passes with no dose reported, warn when pills run low, and send a check-in every morning at 09:00 Vietnam time. You can also leave a little note that shows up in the app.\n\nI only talk to one chat, so your data stays between the two of you." }),
   ]);
 
-  return { say, handle, handleCallback, poll, dailyReport, setProfile };
+  return { say, handle, handleCallback, poll, dailyReport, checkDeadlines, setProfile };
 }
 
 // MARK: Main
@@ -417,5 +441,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     profile();
     bot.poll();
     setInterval(() => bot.dailyReport().catch((e) => console.error('report', e.message)), 60 * 1000);
+    setInterval(() => bot.checkDeadlines().catch((e) => console.error('deadlines', e.message)), 60 * 1000);
   }
 }

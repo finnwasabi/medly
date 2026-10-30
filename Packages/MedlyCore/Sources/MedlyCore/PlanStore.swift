@@ -23,12 +23,20 @@ public struct PlanStore: Sendable {
         var medications: [Medication]
     }
 
+    static func encode(_ medications: [Medication]) throws -> Data {
+        try JSONEncoder().encode(Stored(version: currentVersion, medications: medications))
+    }
+
     /// Loads the saved medications. Without a file there are none yet.
     /// Version 1 becomes one medication with an empty name, which the app fills in its language.
     /// A corrupt file or an unknown version throws instead of silently wiping history.
     public func load() throws -> [Medication] {
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
-        let data = try Data(contentsOf: url)
+        return try Self.decode(Data(contentsOf: url))
+    }
+
+    /// Reads the stored format, version 1 or 2.
+    static func decode(_ data: Data) throws -> [Medication] {
         let decoder = JSONDecoder()
         switch try decoder.decode(Version.self, from: data).version {
         case 1:
@@ -44,7 +52,7 @@ public struct PlanStore: Sendable {
     /// Overwrites the whole state atomically, so a half-written file never exists.
     public func save(_ medications: [Medication]) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let data = try JSONEncoder().encode(Stored(version: Self.currentVersion, medications: medications))
+        let data = try Self.encode(medications)
         #if os(iOS)
         // The "Taken" App Intent runs in the background and must write while the phone is locked.
         try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])

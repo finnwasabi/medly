@@ -1,5 +1,5 @@
 # Tagging vX.Y.Z builds an unsigned .ipa and attaches it, with source.json, to a GitHub Release.
-# SideStore reads the fixed source: https://github.com/finnwasabi/ners-daily/releases/latest/download/source.json
+# SideStore reads the fixed source: https://github.com/finnwasabi/medly/releases/latest/download/source.json
 name: Release
 
 on:
@@ -35,18 +35,18 @@ jobs:
         run: brew install xcodegen
       - name: Test
         run: |
-          swift test --package-path Packages/NersCore
+          swift test --package-path Packages/MedlyCore
           (cd server && node --test)
       - name: Build ipa
         run: VERSION="${GITHUB_REF_NAME#v}" BUILD="$GITHUB_RUN_NUMBER" scripts/build-ipa.sh
       - name: Make source.json
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/NersDaily-$VERSION.ipa"
-          python3 scripts/make-source.py "build/NersDaily-$VERSION.ipa" "$VERSION" "$GITHUB_RUN_NUMBER" "$URL" "$(date -u +%F)" > build/source.json
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/Medly-$VERSION.ipa"
+          python3 scripts/make-source.py "build/Medly-$VERSION.ipa" "$VERSION" "$GITHUB_RUN_NUMBER" "$URL" "$(date -u +%F)" > build/source.json
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "build/NersDaily-${GITHUB_REF_NAME#v}.ipa" build/source.json \
+          gh release create "$GITHUB_REF_NAME" "build/Medly-${GITHUB_REF_NAME#v}.ipa" build/source.json \
             --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

@@ -78,6 +78,24 @@ public struct Planner: Sendable {
 
     public func lastTaken(now: Date) -> DoseRecord? { takes(upTo: now).last }
 
+    /// Doses skipped on purpose.
+    public func skippedCount(now: Date) -> Int { walk(now: now).skipped }
+
+    /// The latest skip, while it can still be undone.
+    public func undoableSkip(now: Date) -> DoseRecord? {
+        guard let last = resolutions(upTo: now).last, last.status == .skipped,
+              now.timeIntervalSince(last.takenAt!) <= settings.undoWindow else { return nil }
+        return last
+    }
+
+    /// When the days off end, if `now` is on one.
+    public func cycleBreakUntil(now: Date) -> Date? { settings.cycle?.breakEnd(after: now) }
+
+    /// When reminders start again, if they are paused or `now` is on a day off.
+    public func restingUntil(now: Date) -> Date? {
+        [settings.pausedUntil(now: now), cycleBreakUntil(now: now)].compactMap { $0 }.max()
+    }
+
     /// Full history for display: doses (on time or late), misses, make-ups and paused slots.
     public func timeline(now: Date) -> [DoseRecord] { resolved(now: now).records }
 
@@ -120,11 +138,20 @@ public struct Planner: Sendable {
             // Each record belongs to its nearest main time, the same rule that picks the next dose after a take.
             // A make-up belongs to the day of the miss it covers and a late dose to the day of the dose it was late for,
             // not the day they were taken.
-            let moment = record.status == .madeUp || record.status == .late ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
+            let moment = [.madeUp, .late, .skipped].contains(record.status) ? record.scheduledAt : (record.takenAt ?? record.scheduledAt)
             let slot = firstSlot(after: moment.addingTimeInterval(-halfPeriod))
             let day = VietnamClock.calendar.startOfDay(for: slot)
             if let existing = result[day], existing.severity >= record.status.severity { continue }
             result[day] = record.status
+        }
+        // Days off since the first record show as paused.
+        if let cycle = settings.cycle, let first = history.compactMap({ $0.takenAt }).min() {
+            let calendar = VietnamClock.calendar
+            var day = calendar.startOfDay(for: first)
+            while day <= now {
+                if result[day] == nil, cycle.isBreak(day) { result[day] = .paused }
+                day = calendar.date(byAdding: .day, value: 1, to: day)!
+            }
         }
         return result
     }
@@ -176,6 +203,22 @@ public struct Planner: Sendable {
         let record = DoseRecord(scheduledAt: currentDose(now: now).dueAt, takenAt: now, status: .taken, consumedPill: consumed)
         history.append(record)
         return record
+    }
+
+    /// "Skip this dose" for the dose pending at `now`. Not a miss, uses no pill; the next dose starts at the next dose
+    /// time. Deleting the record (History, or undo on Today) brings the dose back.
+    @discardableResult
+    public mutating func skip(at now: Date) -> DoseRecord {
+        let record = DoseRecord(scheduledAt: currentDose(now: now).dueAt, takenAt: now, status: .skipped)
+        history.append(record)
+        return record
+    }
+
+    /// When the next dose would be after skipping the one pending at `now`.
+    public func skippingPreview(now: Date) -> Date {
+        var copy = self
+        copy.skip(at: now)
+        return copy.currentDose(now: now).dueAt
     }
 
     /// Undoes the latest "Taken" if still within `undoWindow`.
@@ -281,6 +324,7 @@ public struct Planner: Sendable {
         var dose: Dose
         var missed = 0
         var late = 0
+        var skipped = 0
         var records: [DoseRecord] = []
         /// The pending dose follows directly from the last take, with no miss or pause in between.
         var followsTake = false
@@ -292,32 +336,64 @@ public struct Planner: Sendable {
             .sorted { $0.takenAt! < $1.takenAt! }
     }
 
-    /// Walks the takes up to `now`, counting misses, and returns the pending dose.
+    /// Takes and skips up to `now`, in time order: the events that resolve a dose.
+    private func resolutions(upTo now: Date) -> [DoseRecord] {
+        history
+            .filter { ($0.status == .taken || $0.status == .skipped) && ($0.takenAt.map { $0 <= now } ?? false) }
+            .sorted { $0.takenAt! < $1.takenAt! }
+    }
+
+    /// Walks the takes and skips up to `now`, counting misses, and returns the pending dose.
     private func walk(now: Date) -> WalkState {
-        let taken = takes(upTo: now)
-        guard let first = taken.first else {
-            // No history yet: the first dose is the next main time after `now`.
-            var state = WalkState(dose: doseFromMainTime(firstSlot(after: now)))
-            advance(&state, before: now)
-            return state
-        }
-        var state = WalkState(dose: doseAfterTake(first), records: [first], followsTake: true)
-        for take in taken.dropFirst() {
-            advance(&state, before: take.takenAt!)
-            if take.takenAt! > state.dose.deadlineAt.addingTimeInterval(max(0, settings.lateTolerance)) {
-                var record = take
-                record.status = .late
-                record.scheduledAt = state.dose.dueAt
-                state.records.append(record)
-                state.late += 1
-            } else {
-                state.records.append(take)
+        var state: WalkState?
+        for event in resolutions(upTo: now) {
+            let t = event.takenAt!
+            guard var current = state else {
+                if event.status == .taken {
+                    // The first take ever: nothing was pending before it.
+                    state = WalkState(dose: doseAfterTake(event), records: [event], followsTake: true)
+                    continue
+                }
+                // A skip before any take: the dose pending then was the next dose time.
+                var fresh = WalkState(dose: doseFromMainTime(activeSlot(firstSlot(after: t))))
+                apply(event, to: &fresh)
+                state = fresh
+                continue
             }
-            state.dose = doseAfterTake(take)
-            state.followsTake = true
+            advance(&current, before: t)
+            apply(event, to: &current)
+            state = current
         }
-        advance(&state, before: now)
-        return state
+        guard var final = state else {
+            // No history yet: the first dose is the next dose time after `now`.
+            var fresh = WalkState(dose: doseFromMainTime(activeSlot(firstSlot(after: now))))
+            advance(&fresh, before: now)
+            return fresh
+        }
+        advance(&final, before: now)
+        return final
+    }
+
+    /// Resolves the pending dose with a take or a skip.
+    private func apply(_ event: DoseRecord, to state: inout WalkState) {
+        let t = event.takenAt!
+        var record = event
+        if event.status == .skipped {
+            record.scheduledAt = state.dose.dueAt
+            state.records.append(record)
+            state.skipped += 1
+            state.dose = doseAfterSkip(state.dose, at: t)
+            state.followsTake = false
+            return
+        }
+        if t > state.dose.deadlineAt.addingTimeInterval(max(0, settings.lateTolerance)) {
+            record.status = .late
+            record.scheduledAt = state.dose.dueAt
+            state.late += 1
+        }
+        state.records.append(record)
+        state.dose = doseAfterTake(event)
+        state.followsTake = true
     }
 
     /// Skips doses inside pauses and counts doses whose late window ended before `t`.
@@ -373,10 +449,13 @@ public struct Planner: Sendable {
     private func doseAfterTake(_ take: DoseRecord) -> Dose {
         let t = take.takenAt!
         let slot = firstSlot(after: t.addingTimeInterval(halfPeriod))
+        // The next dose falls after days off: start fresh there, like after a pause.
+        if activeSlot(slot) != slot { return doseFromMainTime(activeSlot(slot)) }
         guard take.nextAtMainTime else { return dose(slot: slot, anchor: t) }
         // Realigned (back to the main time, or the schedule changed): the next dose time at least a quarter period after
         // the take, so moving the time earlier takes effect on the next dose instead of being swallowed by the half rule.
         let aligned = firstSlot(after: t.addingTimeInterval(period / 4))
+        if activeSlot(aligned) != aligned { return doseFromMainTime(activeSlot(aligned)) }
         let normalDeadline = t.addingTimeInterval(maxInterval)
         let deadline = max(aligned, normalDeadline)
         return Dose(slotAt: aligned, dueAt: aligned, deadlineAt: deadline, lateUntil: deadline.addingTimeInterval(lateWindow),
@@ -389,12 +468,30 @@ public struct Planner: Sendable {
         let anchor = min(previous.deadlineAt, previous.slotAt.addingTimeInterval(halfPeriod))
         var slot = previous.slotAt.addingTimeInterval(period)
         while slot <= previous.deadlineAt { slot = slot.addingTimeInterval(period) }
+        if activeSlot(slot) != slot { return doseFromMainTime(activeSlot(slot)) }
         return dose(slot: slot, anchor: anchor)
+    }
+
+    /// After "skip this dose" at `t`: the next dose starts fresh at the next dose time, as if the skipped one had been
+    /// taken on time. Skipping is a choice, so it does not ring harder to catch up.
+    private func doseAfterSkip(_ skipped: Dose, at t: Date) -> Dose {
+        doseFromMainTime(activeSlot(firstSlot(after: max(skipped.slotAt, t))))
+    }
+
+    /// `slot`, or the first dose time after the days off it falls on.
+    func activeSlot(_ slot: Date) -> Date {
+        guard let cycle = settings.cycle else { return slot }
+        var slot = slot
+        // Bounded: at most every slot of one stretch of days off.
+        for _ in 0...(cycle.breakDays * settings.dosesPerDay + 1) where cycle.isBreak(slot) {
+            slot = slot.addingTimeInterval(period)
+        }
+        return slot
     }
 
     /// After a pause: the next dose starts from the first dose time at or after the pause ends.
     private func doseAfterPause(_ end: Date) -> Dose {
-        doseFromMainTime(firstSlot(atOrAfter: end))
+        doseFromMainTime(activeSlot(firstSlot(atOrAfter: end)))
     }
 
     /// A dose at its scheduled time, as if the previous one was taken on time one period before.
