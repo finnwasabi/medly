@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MedlyCore
+@testable import PillotCore
 
 /// Random sequences of user actions with a fixed seed. After every step the planner must keep its invariants,
 /// whatever order the actions come in.

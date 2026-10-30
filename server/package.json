@@ -1,11 +1,11 @@
 {
-  "name": "medly-server",
-  "description": "Sync service and private Telegram bot for Medly",
+  "name": "pillot-server",
+  "description": "Sync service and private Telegram bot for Pillot",
   "private": true,
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/finnwasabi/medly.git",
+    "url": "https://github.com/finnwasabi/pillot.git",
     "directory": "server"
   },
   "type": "module",

@@ -4,7 +4,9 @@ import Foundation
 /// It holds every medication with its history, plus the app's preferences as plain strings.
 /// The connection code is left out on purpose: it is a secret and the bot's /link gives it again.
 public struct Backup: Equatable, Sendable {
-    public static let format = "medly-backup"
+    public static let format = "pillot-backup"
+    /// Formats this app has written before, still read on restore.
+    static let readableFormats: Set<String> = [format, "medly-backup"]
     public static let currentVersion = 1
 
     public var createdAt: Date
@@ -42,7 +44,7 @@ public struct Backup: Equatable, Sendable {
 
     /// Reads a backup file, or the app's own data file (`state.json`, version 1 or 2) as a fallback.
     public static func read(_ data: Data) throws -> Backup {
-        if let file = try? JSONDecoder().decode(File.self, from: data), file.format == format {
+        if let file = try? JSONDecoder().decode(File.self, from: data), readableFormats.contains(file.format) {
             guard file.version <= currentVersion else { throw Failure.tooNew(file.version) }
             return Backup(createdAt: UTCTimestamp.date(from: file.createdAt) ?? .distantPast, medications: file.medications,
                           preferences: file.preferences ?? [:])
@@ -51,9 +53,9 @@ public struct Backup: Equatable, Sendable {
         return Backup(createdAt: .distantPast, medications: medications)
     }
 
-    /// A file name such as "Medly-backup-2026-10-30.json", by the Vietnam date.
+    /// A file name such as "Pillot-backup-2026-10-30.json", by the Vietnam date.
     public static func fileName(at date: Date) -> String {
         let p = VietnamClock.calendar.dateComponents([.year, .month, .day], from: date)
-        return String(format: "Medly-backup-%04d-%02d-%02d.json", p.year ?? 0, p.month ?? 0, p.day ?? 0)
+        return String(format: "Pillot-backup-%04d-%02d-%02d.json", p.year ?? 0, p.month ?? 0, p.day ?? 0)
     }
 }

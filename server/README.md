@@ -36,14 +36,14 @@ API_TOKEN=... PUBLIC_URL=https://example.com/ners node server.js
 With Docker Compose, using the official Node image and mounting the source:
 
 ```yaml
-medly:
+pillot:
   image: node:24-alpine
   working_dir: /app
   command: node server.js
   user: "1000:1000"
-  env_file: ./medly/.env
+  env_file: ./pillot/.env
   volumes:
-    - ./medly/server.js:/app/server.js:ro
-    - ./medly/data:/app/data
+    - ./pillot/server.js:/app/server.js:ro
+    - ./pillot/data:/app/data
   restart: unless-stopped
 ```

@@ -1,4 +1,4 @@
-import MedlyCore
+import PillotCore
 import SwiftUI
 import WidgetKit
 
@@ -8,7 +8,7 @@ struct NextDoseWidget: Widget {
         StaticConfiguration(kind: "NextDose", provider: NextDoseProvider()) { entry in
             NextDoseView(entry: entry)
         }
-        .configurationDisplayName("Medly")
+        .configurationDisplayName("Pillot")
         .description(NextDoseEntry.english ? "Your next doses." : "Các lần uống sắp tới.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryInline, .accessoryCircular])
     }
@@ -131,7 +131,7 @@ struct NextDoseView: View {
     @ViewBuilder
     private var content: some View {
         if !entry.readable || entry.items.isEmpty {
-            Text(entry.readable ? (en ? "No meds yet" : "Chưa có thuốc") : (en ? "Open Medly once" : "Mở Medly một lần"))
+            Text(entry.readable ? (en ? "No meds yet" : "Chưa có thuốc") : (en ? "Open Pillot once" : "Mở Pillot một lần"))
                 .font(.headline.weight(.heavy))
         } else {
             switch family {

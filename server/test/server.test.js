@@ -156,7 +156,7 @@ test('names come from the app, with a neutral word without one, and are escaped'
   const unnamed = { ...spec, name: null };
   assert.match(changeText(unnamed, later(unnamed, '2026-10-28T14:01:00Z', { lastTakenAt: '2026-10-28T14:01:00Z' })), /^✅ They took/);
   assert.match(statusText({ ...spec, name: 'Mai' }), /^💊 <b>Mai's meds<\/b>/);
-  assert.match(statusText(unnamed), /^💊 <b>Medly<\/b>/);
+  assert.match(statusText(unnamed), /^💊 <b>Pillot<\/b>/);
   assert.match(statusText({ ...spec, name: '<b>x</b>' }), /&lt;b&gt;x&lt;\/b&gt;'s meds/);
   assert.equal(esc('a & <b>'), 'a &amp; &lt;b&gt;');
 });

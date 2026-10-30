@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MedlyCore
+@testable import PillotCore
 
 @Suite struct AlertPlannerTests {
     /// Taken at 23:00, so the next dose has main time 21:00 and deadline 23:00, leaving room for the pre-deadline chain.

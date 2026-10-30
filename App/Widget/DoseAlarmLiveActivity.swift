@@ -3,7 +3,7 @@ import SwiftUI
 import WidgetKit
 
 @main
-struct MedlyWidgets: WidgetBundle {
+struct PillotWidgets: WidgetBundle {
     var body: some Widget {
         DoseAlarmLiveActivity()
         NextDoseWidget()
@@ -22,7 +22,7 @@ struct DoseAlarmLiveActivity: Widget {
                     Text(title(context.state, context.attributes.metadata))
                         .font(.headline.weight(.heavy))
                         .lineLimit(2)
-                    Text("Medly")
+                    Text("Pillot")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

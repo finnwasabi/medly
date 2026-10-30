@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MedlyCore
+@testable import PillotCore
 
 @Suite struct SkipTests {
     @Test func skippingIsNotAMissAndStartsFreshAtTheNextDose() {
@@ -109,7 +109,7 @@ import Testing
         let backup = Backup(createdAt: vn(2026, 10, 30, 9), medications: [a], preferences: ["userName": "Mai", "snoozeMinutes": "9"])
         let read = try Backup.read(backup.data())
         #expect(read == backup)
-        #expect(Backup.fileName(at: vn(2026, 10, 30, 1)) == "Medly-backup-2026-10-30.json")
+        #expect(Backup.fileName(at: vn(2026, 10, 30, 1)) == "Pillot-backup-2026-10-30.json")
     }
 
     @Test func theAppDataFileRestoresToo() throws {
@@ -119,9 +119,14 @@ import Testing
         #expect(read.preferences.isEmpty)
     }
 
+    @Test func backupsFromBeforeTheRenameRestore() throws {
+        let old = #"{"format":"medly-backup","version":1,"createdAt":"2026-10-30T02:00:00Z","medications":[]}"#
+        #expect(try Backup.read(Data(old.utf8)).createdAt == vn(2026, 10, 30, 9))
+    }
+
     @Test func junkAndNewerBackupsAreRefused() throws {
         #expect(throws: Backup.Failure.unreadable) { try Backup.read(Data("hello".utf8)) }
-        let newer = #"{"format":"medly-backup","version":9,"createdAt":"2026-10-30T02:00:00Z","medications":[]}"#
+        let newer = #"{"format":"pillot-backup","version":9,"createdAt":"2026-10-30T02:00:00Z","medications":[]}"#
         #expect(throws: Backup.Failure.tooNew(9)) { try Backup.read(Data(newer.utf8)) }
     }
 }

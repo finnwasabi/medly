@@ -1,6 +1,6 @@
 import AlarmKit
 import AppIntents
-import MedlyCore
+import PillotCore
 import SwiftUI
 import UserNotifications
 
