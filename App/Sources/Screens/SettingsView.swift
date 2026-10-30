@@ -193,7 +193,9 @@ struct SettingsView: View {
             NeoRow(title: L("Thông báo đang hẹn", "Notifications set"), detail: report.map { "\($0.result.notifications)" } ?? "-") { EmptyView() }
             NeoRow(title: L("Nhắc xa nhất", "Last reminder set"), detail: report?.result.lastAlert.map(when) ?? "-") { EmptyView() }
             NeoRow(title: L("Lần hẹn gần nhất", "Last scheduling"),
-                   detail: report.map { L("\(when($0.at)), mất \(Self.milliseconds($0.duration)) ms", "\(when($0.at)), took \(Self.milliseconds($0.duration)) ms") } ?? "-") { EmptyView() }
+                   detail: report.map { L("\(when($0.at)), mất \(Self.milliseconds($0.duration)) ms, đổi \($0.result.changed)",
+                                          "\(when($0.at)), took \(Self.milliseconds($0.duration)) ms, \($0.result.changed) changed") } ?? "-") { EmptyView() }
+            NeoRow(title: L("Chạy nền gần nhất", "Last background run"), detail: model.lastBackgroundRefresh.map(when) ?? L("chưa bao giờ", "never")) { EmptyView() }
             if let failures = report?.result.failures, failures > 0 {
                 NeoRow(title: L("Hẹn lỗi", "Failed"), detail: "\(failures)") { EmptyView() }
             }
