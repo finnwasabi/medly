@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import NersCore
+@testable import MedlyCore
 
 @Suite struct PillCounterTests {
     @Test func countDownToZero() {
@@ -97,7 +97,7 @@ import Testing
         var medication = Medication(name: "B", settings: ReminderSettings(refillReminder: RefillReminder(enabled: false, daysBefore: 5)))
         medication.planner.pause(days: 2, now: vn(2026, 10, 27, 8))
         let now = vn(2026, 10, 27, 8).addingTimeInterval(0.75)
-        let snapshot = Snapshot(name: "Ner", medications: [medication], now: now)
+        let snapshot = Snapshot(name: "Mai", medications: [medication], now: now)
         let data = try snapshot.jsonData()
         let json = try object(data)
         let med = try #require((json["medications"] as? [NSDictionary])?.first)

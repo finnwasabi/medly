@@ -1,4 +1,4 @@
-import NersCore
+import MedlyCore
 import SwiftUI
 
 /// The list of medications. Each one has its own times, doses per day, maximum gap and pill count.
@@ -117,6 +117,11 @@ struct MedicationEditor: View {
     /// taken from an alarm while the editor is open is not undone.
     @State private var remaining = 0
     @State private var remainingAtOpen = 0
+    @State private var cycleOn = false
+    @State private var activeDays = 21
+    @State private var breakDays = 7
+    /// The first day on of the current pack, Vietnam date.
+    @State private var cycleStart = Date.now
     @State private var refillEnabled = true
     @State private var refillAt = 7
     @State private var warning: ResetPreview?
@@ -137,6 +142,8 @@ struct MedicationEditor: View {
                     }
                     section(L("Màu và biểu tượng", "Color and icon")) { lookPicker }
                     section(L("Lịch uống", "Schedule"), footer: scheduleFooter) { schedule }
+                    section(L("Ngày nghỉ", "Days off"), footer: L("Ví dụ vỉ 21 viên nghỉ 7 ngày. Ngày nghỉ không nhắc và không tính hụt.",
+                                                                 "For example 21 days on and 7 off. Nothing rings and nothing counts as missed on days off.")) { cycle }
                     section(L("Số viên", "Pills"), footer: counting ? nil : L("Tắt đếm thì app chỉ nhắc giờ.", "With counting off, the app only reminds you.")) { pills }
                     if let live { pauseSection(live) }
                     if medication != nil {
@@ -277,6 +284,44 @@ struct MedicationEditor: View {
         }
     }
 
+    private var cycle: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Toggle(L("Có ngày nghỉ theo chu kỳ", "Days off in a cycle"), isOn: $cycleOn)
+                .toggleStyle(NeoToggleStyle())
+            if cycleOn {
+                InkDivider()
+                NeoRow(title: L("Uống", "Days on")) {
+                    NeoStepper(value: $activeDays, range: 1...90, unit: L("ngày", "days"), editable: true)
+                }
+                NeoRow(title: L("Nghỉ", "Days off")) {
+                    NeoStepper(value: $breakDays, range: 1...30, unit: L("ngày", "days"), editable: true)
+                }
+                NeoRow(title: L("Ngày uống đầu tiên", "First day on"), detail: L("của vỉ hoặc chu kỳ hiện tại", "of the current pack or cycle")) {
+                    DatePicker("", selection: $cycleStart, displayedComponents: .date)
+                        .labelsHidden()
+                        .environment(\.timeZone, VietnamClock.timeZone)
+                }
+                Text(cycleSummary)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Palette.textSecondary)
+            }
+        }
+    }
+
+    /// "Hôm nay là ngày 5/28: ngày uống." or the end of the days off.
+    private var cycleSummary: String {
+        let c = DoseCycle(activeDays: activeDays, breakDays: breakDays, startDay: cycleStart)
+        let calendar = VietnamClock.calendar
+        let days = calendar.dateComponents([.day], from: c.startDay, to: calendar.startOfDay(for: .now)).day ?? 0
+        guard days >= 0 else { return L("Chu kỳ bắt đầu \(TodayText.dayTitle(c.startDay)).", "The cycle starts \(TodayText.dayTitle(c.startDay)).") }
+        let length = activeDays + breakDays
+        if let end = c.breakEnd(after: .now) {
+            return L("Hôm nay là ngày \(days % length + 1)/\(length): nghỉ, uống lại từ \(TodayText.dayTitle(end)).",
+                     "Today is day \(days % length + 1) of \(length): a day off, doses start again \(TodayText.dayTitle(end)).")
+        }
+        return L("Hôm nay là ngày \(days % length + 1)/\(length): ngày uống.", "Today is day \(days % length + 1) of \(length): a day on.")
+    }
+
     private var draftTimes: String {
         var draft = Medication(name: "")
         let parts = VietnamClock.calendar.dateComponents([.hour, .minute], from: time)
@@ -384,6 +429,12 @@ struct MedicationEditor: View {
         dosesPerDay = s.dosesPerDay
         gapHours = Int((s.maxInterval / 3600).rounded())
         counting = s.pills != nil
+        if let c = s.cycle {
+            cycleOn = true
+            activeDays = c.activeDays
+            breakDays = c.breakDays
+            cycleStart = c.startDay
+        }
         if let pills = s.pills {
             packSize = pills.pack
             startCount = pills.pack
@@ -420,6 +471,7 @@ struct MedicationEditor: View {
                 medication.settings.pills?.packSize = packSize
             }
             medication.settings.refillReminder = refill
+            medication.settings.cycle = cycleOn ? DoseCycle(activeDays: activeDays, breakDays: breakDays, startDay: cycleStart) : nil
         }
         if let live {
             let s = live.settings

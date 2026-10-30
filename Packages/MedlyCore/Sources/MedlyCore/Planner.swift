@@ -214,6 +214,13 @@ public struct Planner: Sendable {
         return record
     }
 
+    /// When the next dose would be after skipping the one pending at `now`.
+    public func skippingPreview(now: Date) -> Date {
+        var copy = self
+        copy.skip(at: now)
+        return copy.currentDose(now: now).dueAt
+    }
+
     /// Undoes the latest "Taken" if still within `undoWindow`.
     @discardableResult
     public mutating func undoLastTaken(now: Date) -> Bool {

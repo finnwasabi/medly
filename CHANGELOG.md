@@ -5,6 +5,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-30
+
+### Added
+- Backup and restore: save a file with every medication, its history and your preferences wherever you like (iCloud Drive, Google Drive, a chat), and restore it after a confirmation. Settings reminds you when there is no recent backup.
+- Skip this dose: stops the reminders for one dose without counting it as missed or using a pill. It can be undone for 10 minutes on Today, or deleted in History.
+- Days off in a cycle, such as 21 days on and 7 off: nothing rings and nothing counts as missed on days off.
+- Home screen and lock screen widgets with the next doses.
+- An App Shortcut, "I took my meds", for Siri, Shortcuts and Spotlight.
+- A first launch step to pick light, dark or the phone's appearance, before the language.
+- Bot: a nudge when a deadline passes with no dose reported, skipped doses, and the bot is named Medly.
+
+### Changed
+- The app is now called Medly, and the repository is `finnwasabi/medly`. Installed copies update in place and keep their data.
+- The data file moves into an App Group shared with the widget.
+
 ## [0.2.1] - 2026-10-29
 
 ### Added

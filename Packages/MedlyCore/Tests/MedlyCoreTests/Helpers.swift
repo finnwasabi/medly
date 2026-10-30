@@ -1,5 +1,5 @@
 import Foundation
-@testable import NersCore
+@testable import MedlyCore
 
 /// Builds a moment in Vietnam time, for readable tests.
 func vn(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {

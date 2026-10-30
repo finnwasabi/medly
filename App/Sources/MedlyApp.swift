@@ -3,10 +3,11 @@ import SwiftUI
 import UserNotifications
 
 @main
-struct NersDailyApp: App {
+struct MedlyApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var model = AppModel.shared
     @State private var needsOnboarding = AlarmManager.shared.authorizationState == .notDetermined
+    @State private var themeChosen = UserDefaults.standard.string(forKey: "theme") != nil
     @State private var languageChosen = AppLanguage.isChosen
     @State private var profileDone = UserDefaults.standard.bool(forKey: "profileDone")
 
@@ -33,7 +34,7 @@ struct NersDailyApp: App {
         }
     }
 
-    // The `-screen` launch argument only exists for screenshots (language, profile, onboarding, today, meds, history, settings, editor).
+    // The `-screen` launch argument only exists for screenshots (theme, language, profile, onboarding, today, meds, history, settings, editor).
     @ViewBuilder
     private var launchScreen: some View {
         switch UserDefaults.standard.string(forKey: "screen") {
@@ -45,8 +46,16 @@ struct NersDailyApp: App {
         case "meds": RootView(selectedTab: 1)
         case "history": RootView(selectedTab: 2)
         case "settings": RootView(selectedTab: 3)
+        case "theme": ThemeView {}
         default:
-            if !languageChosen {
+            // Installs that already chose a language skip the theme step and keep following the phone.
+            if !themeChosen && !languageChosen {
+                ThemeView {
+                    // Store the choice even when it stays on System, so the step is not shown again.
+                    UserDefaults.standard.set(model.theme.rawValue, forKey: "theme")
+                    themeChosen = true
+                }
+            } else if !languageChosen {
                 LanguageView { language in
                     model.language = language
                     languageChosen = true

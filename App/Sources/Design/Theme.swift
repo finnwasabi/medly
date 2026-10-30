@@ -1,4 +1,4 @@
-import NersCore
+import MedlyCore
 import SwiftUI
 import UIKit
 
@@ -48,7 +48,7 @@ enum Swatch {
 // Dose status. Fixed colors: green = taken, yellow = late, blue = missed but made up, red = missed, grey = paused.
 // Always paired with a label and an icon, never color alone.
 enum DoseStatus {
-    case taken, late, madeUp, missed, paused, upcoming
+    case taken, late, madeUp, missed, paused, upcoming, skipped
     /// Due now, before the deadline: not late yet.
     case due
     /// A past day before the user started, with nothing to report.
@@ -61,6 +61,7 @@ enum DoseStatus {
         case .madeUp: L("Uống bù", "Made up")
         case .missed: L("Hụt", "Missed")
         case .paused: L("Tạm dừng", "Paused")
+        case .skipped: L("Bỏ qua", "Skipped")
         case .upcoming: L("Sắp tới", "Upcoming")
         case .due: L("Tới giờ", "Due now")
         case .noData: L("Chưa có dữ liệu", "No data")
@@ -74,6 +75,7 @@ enum DoseStatus {
         case .madeUp: "arrow.uturn.backward"
         case .missed: "xmark"
         case .paused: "pause.fill"
+        case .skipped: "forward.end.fill"
         case .upcoming: "hourglass"
         case .due: "bell.fill"
         case .noData: "minus"
@@ -85,6 +87,7 @@ enum DoseStatus {
         case .taken: Color(hex: 0x7CE3A6)
         case .late, .due: Palette.yellow
         case .madeUp: Palette.sky
+        case .skipped: Palette.lavender
         case .missed: Palette.coral
         case .paused, .upcoming, .noData: Palette.stone
         }
@@ -92,13 +95,14 @@ enum DoseStatus {
 }
 
 extension DoseStatus {
-    init(_ status: NersCore.DoseStatus) {
+    init(_ status: MedlyCore.DoseStatus) {
         switch status {
         case .taken: self = .taken
         case .late: self = .late
         case .missed: self = .missed
         case .paused: self = .paused
         case .madeUp: self = .madeUp
+        case .skipped: self = .skipped
         }
     }
 }

@@ -1,5 +1,5 @@
 import Foundation
-import NersCore
+import MedlyCore
 
 /// The selected language. Stored in UserDefaults so any thread can read it (scheduling, App Intents).
 nonisolated enum AppLanguage {

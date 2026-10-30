@@ -1,5 +1,5 @@
 import Foundation
-import NersCore
+import MedlyCore
 
 /// A connection code shaped `https://host/path#token`, sent by the bot's /link command.
 struct SyncConnection: Equatable {
