@@ -28,6 +28,13 @@ enum Palette {
     static let primary = pink
 }
 
+/// Motion for small state changes: quick, a touch of spring, never in the way. With Reduce Motion, changes are instant.
+enum Motion {
+    static let snappy = Animation.snappy(duration: 0.3, extraBounce: 0.06)
+
+    static func snappy(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : snappy }
+}
+
 enum Neo {
     /// Outline of cards and large controls.
     static let border: CGFloat = 2.25
@@ -279,6 +286,8 @@ struct NeoToggleStyle: ToggleStyle {
 struct NeoSegmented<Value: Hashable>: View {
     let options: [(value: Value, label: String)]
     @Binding var selection: Value
+    @Namespace private var pill
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 6) {
@@ -292,9 +301,14 @@ struct NeoSegmented<Value: Hashable>: View {
                         .minimumScaleFactor(0.8)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, minHeight: 40)
-                        .background(selected ? Palette.yellow : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay {
-                            if selected { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.ink, lineWidth: Neo.thinBorder) }
+                        .background {
+                            // One pill that slides to the selected option.
+                            if selected {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Palette.yellow)
+                                    .strokeBorder(Palette.ink, lineWidth: Neo.thinBorder)
+                                    .matchedGeometryEffect(id: "pill", in: pill)
+                            }
                         }
                         .contentShape(Rectangle())
                 }
@@ -304,6 +318,7 @@ struct NeoSegmented<Value: Hashable>: View {
         }
         .padding(5)
         .neo(Palette.background, radius: 14, shadow: 0)
+        .animation(Motion.snappy(reduceMotion), value: selection)
     }
 }
 
@@ -319,6 +334,7 @@ struct NeoStepper: View {
 
     @State private var text = ""
     @FocusState private var focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 10) {
@@ -348,6 +364,8 @@ struct NeoStepper: View {
                         .onAppear { text = String(value) }
                 } else {
                     Text("\(value)")
+                        .contentTransition(.numericText(value: Double(value)))
+                        .animation(Motion.snappy(reduceMotion), value: value)
                 }
                 Text(unit)
             }
