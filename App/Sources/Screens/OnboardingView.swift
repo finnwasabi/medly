@@ -52,7 +52,7 @@ struct OnboardingView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 16)
         }
-        .background(Palette.background)
+        .screenBackground()
     }
 
     private func point(icon: String, text: String) -> some View {

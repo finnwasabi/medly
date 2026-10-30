@@ -108,6 +108,13 @@ export function validateSnapshot(s) {
     }
     // Sent since 0.3.0.
     if (m.skippedCount !== undefined && !isCount(m.skippedCount)) return `medications[${i}].skippedCount must be a non-negative integer`;
+    // Sent since 0.5.0.
+    for (const key of ['asNeeded', 'courseEnded']) {
+      if (m[key] !== undefined && typeof m[key] !== 'boolean') return `medications[${i}].${key} must be a boolean`;
+    }
+    for (const key of ['pillsPerDose', 'takenToday']) {
+      if (m[key] !== undefined && !isCount(m[key])) return `medications[${i}].${key} must be a non-negative integer`;
+    }
     const problem = validateMedicationFields(m, { requireId: true });
     if (problem) return `medications[${i}].${problem}`;
   }
@@ -119,14 +126,23 @@ export function validateSnapshot(s) {
 const needsRefill = (m) => m?.pillsTotal != null && m.refillReminder?.enabled && m.pillsRemaining <= m.refillReminder.daysBefore;
 
 function medicationStatus(m, now) {
-  const lines = [`${medName(m)} · ${frequency(m.dosesPerDay)}`];
+  const each = m.pillsPerDose > 1 ? ` · ${m.pillsPerDose} pills each` : '';
+  const lines = [`${medName(m)} · ${m.asNeeded ? 'as needed' : frequency(m.dosesPerDay)}${each}`];
   lines.push(m.lastTakenAt ? `✅ Last taken ${vnTime(m.lastTakenAt)} · ${vnDay(m.lastTakenAt)}` : '🌱 No doses logged yet');
-  if (m.pausedUntil && Date.parse(m.pausedUntil) > now) {
+  if (m.asNeeded) {
+    lines.push(`🩹 Taken ${plural(m.takenToday ?? 0, 'time')} today`);
+  } else if (m.courseEnded) {
+    lines.push('🏁 Course finished, no more reminders');
+  } else if (m.pausedUntil && Date.parse(m.pausedUntil) > now) {
     lines.push(`⏸️ Paused until ${vnTime(m.pausedUntil)} · ${vnDay(m.pausedUntil)}`);
   } else {
     lines.push(`⏰ Next ${vnTime(m.nextDueAt)} · ${vnDay(m.nextDueAt)}, deadline ${vnTime(m.deadlineAt)}`);
   }
   const notMadeUp = m.missedCount - m.madeUpCount;
+  if (m.asNeeded) {
+    if (m.pillsTotal != null) lines.push(`💊 ${m.pillsRemaining} of ${m.pillsTotal} pills left${needsRefill(m) ? ' · 🛒 time to buy more' : ''}`);
+    return lines.join('\n');
+  }
   lines.push(`📊 ${m.takenCount} taken · ${m.lateCount} late · ${notMadeUp} missed${m.madeUpCount ? ` · ${m.madeUpCount} made up` : ''}${m.skippedCount ? ` · ${m.skippedCount} skipped` : ''}`);
   if (m.pillsTotal != null) lines.push(`💊 ${m.pillsRemaining} of ${m.pillsTotal} pills left${needsRefill(m) ? ' · 🛒 time to buy more' : ''}`);
   return lines.join('\n');
@@ -389,7 +405,8 @@ export function createBot({ token, chatId, store, publicUrl, apiToken, fetchImpl
     if (!s) return;
     const nudged = { ...(store.get().nudged ?? {}) };
     const late = s.medications.filter((m) => {
-      const resting = m.pausedUntil && Date.parse(m.pausedUntil) > now;
+      // Nothing is due for a medication taken when needed or a finished course.
+      const resting = m.asNeeded || m.courseEnded || (m.pausedUntil && Date.parse(m.pausedUntil) > now);
       const reported = m.lastTakenAt && Date.parse(m.lastTakenAt) >= Date.parse(m.nextDueAt);
       return !resting && !reported && now > Date.parse(m.deadlineAt) + NUDGE_AFTER_MS && nudged[m.id] !== m.deadlineAt;
     });

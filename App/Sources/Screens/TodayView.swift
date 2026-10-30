@@ -49,15 +49,7 @@ struct TodayView: View {
                     // crossfaded the old and new contents on top of each other (0.3.2). The confetti is the feedback.
                 }
             }
-            .background(Palette.background)
-            .confirmationDialog(L("Bỏ qua lần uống này?", "Skip this dose?"), isPresented: Binding(get: { confirmSkip != nil }, set: { if !$0 { confirmSkip = nil } }),
-                                titleVisibility: .visible, presenting: confirmSkip) { medication in
-                Button(L("Bỏ qua lần này", "Skip this dose")) { model.skip(medication.id) }
-            } message: { medication in
-                let next = medication.planner.skippingPreview(now: .now)
-                Text(L("\(medication.name) thôi nhắc lần này, không tính là hụt và không trừ viên. Lần tới: \(TodayText.relativeDay(next, from: .now)) \(TimeFormatting.vn(next)). Có nên bỏ hay không: hỏi bác sĩ, dược sĩ.",
-                       "No more reminders for this dose of \(medication.name). It does not count as missed and uses no pill. Next: \(TodayText.relativeDay(next, from: .now)) \(TimeFormatting.vn(next)). Whether to skip is a question for your doctor or pharmacist."))
-            }
+            .screenBackground()
             // Here and not on the card's button: a card is rebuilt every minute by the timeline and moves when the cards reorder.
             .alert(L("Về lại giờ chính?", "Back to the usual time?"), isPresented: Binding(get: { confirmRealign != nil }, set: { if !$0 { confirmRealign = nil } }),
                    presenting: confirmRealign) { request in
@@ -171,7 +163,14 @@ struct TodayView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if let until = medication.settings.pausedUntil(now: now) {
+            if medication.settings.courseEnded(now: now), let end = medication.settings.endDay {
+                StatusPill(status: .paused)
+                Text(L("Đã xong liệu trình, ngày cuối là \(TodayText.dayTitle(end)). Muốn uống tiếp thì sửa ngày kết thúc trong tab Thuốc.",
+                       "Course finished, the last day was \(TodayText.dayTitle(end)). To keep going, change the end date in the Meds tab."))
+                    .font(.callout.weight(.semibold))
+            } else if medication.settings.asNeeded {
+                asNeededBlock(medication, summary, now: now)
+            } else if let until = medication.settings.pausedUntil(now: now) {
                 StatusPill(status: .paused)
                 Text(L("Tạm dừng nhắc tới \(TodayText.relativeDay(until, from: now)) \(TimeFormatting.vn(until)).", "Reminders paused until \(TodayText.relativeDay(until, from: now)) \(TimeFormatting.vn(until))."))
                     .font(.callout.weight(.semibold))
@@ -235,6 +234,33 @@ struct TodayView: View {
         .card(Swatch.color(medication.color))
     }
 
+    /// A medication taken when needed: how many today, when the last one was, and a warning when the next would be too
+    /// soon or one too many. Taking it anyway is allowed; the app gives no advice beyond the limits the user set.
+    @ViewBuilder
+    private func asNeededBlock(_ medication: Medication, _ summary: PlannerSummary, now: Date) -> some View {
+        let s = medication.settings
+        let today = medication.planner.takenToday(now: now)
+        Text(L("Hôm nay: \(today)/\(s.maxPerDay) lần", "Today: \(today) of \(s.maxPerDay)"))
+            .font(.title2.weight(.black))
+        if let last = summary.lastTaken?.takenAt {
+            Text(L("Lần gần nhất: \(TodayText.relativeDay(last, from: now)) \(TimeFormatting.vn(last))", "Last: \(TodayText.relativeDay(last, from: now)) \(TimeFormatting.vn(last))"))
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(Palette.onFillSecondary)
+        }
+        if today >= s.maxPerDay {
+            Callout(text: L("Đã đủ \(s.maxPerDay) lần hôm nay theo mức bạn đặt.", "That is the \(s.maxPerDay) you set for today."), icon: "exclamationmark.triangle.fill", fill: Palette.coral)
+        } else if let allowed = medication.planner.nextAllowed(now: now), now < allowed {
+            Callout(text: L("Chưa đủ \(TodayText.duration(s.minGap)) từ lần trước, còn \(TodayText.duration(allowed.timeIntervalSince(now))).",
+                            "Less than \(TodayText.duration(s.minGap)) since the last one, \(TodayText.duration(allowed.timeIntervalSince(now))) to go."),
+                    icon: "hourglass", fill: Palette.surfaceOnFill)
+        }
+        if let last = summary.lastTaken?.takenAt, now.timeIntervalSince(last) <= s.undoWindow {
+            Button(L("Hoàn tác", "Undo")) { Task { await model.undo(medication.id) } }
+                .buttonStyle(ChipButtonStyle(fill: Palette.surfaceOnFill))
+        }
+        takeButton(medication)
+    }
+
     private func takeButton(_ medication: Medication) -> some View {
         Button(L("Đã uống", "Taken")) {
             tapped += 1
@@ -249,6 +275,17 @@ struct TodayView: View {
             Label(L("Bỏ qua lần này", "Skip this dose"), systemImage: "forward.end")
         }
         .buttonStyle(ChipButtonStyle(fill: Palette.surfaceOnFill))
+        // On the button: since iOS 26 the dialog is a popover from the view it is attached to, and from the screen it opened
+        // off to the side. The card keeps its identity across the minute redraws, so the dialog stays up.
+        .confirmationDialog(L("Bỏ qua lần uống này?", "Skip this dose?"),
+                            isPresented: Binding(get: { confirmSkip?.id == medication.id }, set: { if !$0 { confirmSkip = nil } }),
+                            titleVisibility: .visible) {
+            Button(L("Bỏ qua lần này", "Skip this dose")) { model.skip(medication.id) }
+        } message: {
+            let next = medication.planner.skippingPreview(now: .now)
+            Text(L("\(medication.name) thôi nhắc lần này, không tính là hụt và không trừ viên. Lần tới: \(TodayText.relativeDay(next, from: .now)) \(TimeFormatting.vn(next)). Có nên bỏ hay không: hỏi bác sĩ, dược sĩ.",
+                   "No more reminders for this dose of \(medication.name). It does not count as missed and uses no pill. Next: \(TodayText.relativeDay(next, from: .now)) \(TimeFormatting.vn(next)). Whether to skip is a question for your doctor or pharmacist."))
+        }
     }
 
     private func pillsRow(_ pills: PillCounter, refill: RefillReminder) -> some View {
@@ -395,8 +432,15 @@ extension Palette {
 extension Medication {
     /// "Mỗi ngày lúc 21:00" or "2 lần/ngày, 08:00 · 20:00".
     var scheduleSummary: String {
+        let pills = settings.pillsPerDose > 1 ? L(" · \(settings.pillsPerDose) viên", " · \(settings.pillsPerDose) pills") : ""
+        if settings.asNeeded {
+            let gap = TodayText.duration(settings.minGap)
+            return L("Khi cần, cách ít nhất \(gap)", "When needed, at least \(gap) apart") + pills
+        }
         let times = doseTimes.joined(separator: " · ")
-        return settings.dosesPerDay == 1 ? L("Mỗi ngày lúc \(times)", "Daily at \(times)") : L("\(settings.dosesPerDay) lần/ngày, \(times)", "\(settings.dosesPerDay)× a day, \(times)")
+        let schedule = settings.dosesPerDay == 1 ? L("Mỗi ngày lúc \(times)", "Daily at \(times)") : L("\(settings.dosesPerDay) lần/ngày, \(times)", "\(settings.dosesPerDay)× a day, \(times)")
+        let end = settings.endDay.map { L(" · tới \(TodayText.shortDate($0))", " · until \(TodayText.shortDate($0))") } ?? ""
+        return schedule + pills + end
     }
 
     /// The clock times of the doses, Vietnam time, earliest in the day first.
@@ -431,6 +475,12 @@ enum TodayText {
 
     static func monthTitle(month: Int, year: Int) -> String {
         L("Tháng \(month), \(String(year))", "\(monthsEN[month - 1]) \(String(year))")
+    }
+
+    /// "7/11", by the Vietnam date.
+    static func shortDate(_ date: Date) -> String {
+        let parts = VietnamClock.calendar.dateComponents([.day, .month], from: date)
+        return "\(parts.day ?? 1)/\(parts.month ?? 1)"
     }
 
     /// "today", "tomorrow" or a weekday, by the Vietnam date.

@@ -14,7 +14,7 @@ import Testing
         for _ in 0..<300 {
             var settings = ReminderSettings(mainHour: Int.random(in: 0...23, using: &rng), mainMinute: Int.random(in: 0...59, using: &rng),
                                             dosesPerDay: ReminderSettings.allowedDosesPerDay.randomElement(using: &rng)!)
-            settings.maxInterval = settings.period * [1, 1.25, 1.5].randomElement(using: &rng)!
+            settings.maxInterval = settings.period * [1, 1.25, 1.5, 2].randomElement(using: &rng)!
             if Bool.random(using: &rng) {
                 settings.cycle = DoseCycle(activeDays: Int.random(in: 1...24, using: &rng), breakDays: Int.random(in: 1...7, using: &rng),
                                            startDay: vn(2026, 1, 1, 0).addingTimeInterval(TimeInterval.random(in: 0...(300 * 24 * hour), using: &rng)))

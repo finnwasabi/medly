@@ -75,11 +75,17 @@ public struct MedicationSnapshot: Codable, Equatable, Sendable {
     public var pillsRemaining: Int?
     public var refillReminder: RefillReminder
     public var pausedUntil: Date?
+    /// Sent since 0.5.0: taken when needed (no schedule), the course is over, pills per dose, and takes today.
+    public var asNeeded: Bool
+    public var courseEnded: Bool
+    public var pillsPerDose: Int
+    public var takenToday: Int
 
     public init(
         id: UUID, name: String, dosesPerDay: Int, lastTakenAt: Date?, nextDueAt: Date, deadlineAt: Date,
         takenCount: Int, missedCount: Int, lateCount: Int, madeUpCount: Int, skippedCount: Int = 0,
-        pillsTotal: Int?, pillsRemaining: Int?, refillReminder: RefillReminder, pausedUntil: Date?
+        pillsTotal: Int?, pillsRemaining: Int?, refillReminder: RefillReminder, pausedUntil: Date?,
+        asNeeded: Bool = false, courseEnded: Bool = false, pillsPerDose: Int = 1, takenToday: Int = 0
     ) {
         self.id = id
         self.name = name
@@ -96,11 +102,16 @@ public struct MedicationSnapshot: Codable, Equatable, Sendable {
         self.pillsRemaining = pillsRemaining
         self.refillReminder = refillReminder
         self.pausedUntil = pausedUntil.map(UTCTimestamp.floorToSecond)
+        self.asNeeded = asNeeded
+        self.courseEnded = courseEnded
+        self.pillsPerDose = pillsPerDose
+        self.takenToday = takenToday
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, dosesPerDay, lastTakenAt, nextDueAt, deadlineAt, takenCount, missedCount, lateCount, madeUpCount, skippedCount
         case pillsTotal, pillsRemaining, refillReminder, pausedUntil
+        case asNeeded, courseEnded, pillsPerDose, takenToday
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -120,6 +131,10 @@ public struct MedicationSnapshot: Codable, Equatable, Sendable {
         try c.encode(pillsRemaining, forKey: .pillsRemaining)
         try c.encode(refillReminder, forKey: .refillReminder)
         try c.encode(pausedUntil.map(UTCTimestamp.string(from:)), forKey: .pausedUntil)
+        try c.encode(asNeeded, forKey: .asNeeded)
+        try c.encode(courseEnded, forKey: .courseEnded)
+        try c.encode(pillsPerDose, forKey: .pillsPerDose)
+        try c.encode(takenToday, forKey: .takenToday)
     }
 
     public init(from decoder: Decoder) throws {
@@ -139,7 +154,11 @@ public struct MedicationSnapshot: Codable, Equatable, Sendable {
             pillsTotal: try c.decodeIfPresent(Int.self, forKey: .pillsTotal),
             pillsRemaining: try c.decodeIfPresent(Int.self, forKey: .pillsRemaining),
             refillReminder: try c.decode(RefillReminder.self, forKey: .refillReminder),
-            pausedUntil: try c.optionalTimestamp(.pausedUntil)
+            pausedUntil: try c.optionalTimestamp(.pausedUntil),
+            asNeeded: try c.decodeIfPresent(Bool.self, forKey: .asNeeded) ?? false,
+            courseEnded: try c.decodeIfPresent(Bool.self, forKey: .courseEnded) ?? false,
+            pillsPerDose: try c.decodeIfPresent(Int.self, forKey: .pillsPerDose) ?? 1,
+            takenToday: try c.decodeIfPresent(Int.self, forKey: .takenToday) ?? 0
         )
     }
 }
@@ -162,7 +181,12 @@ extension Medication {
             pillsTotal: settings.pills?.total,
             pillsRemaining: settings.pills?.remaining,
             refillReminder: settings.refillReminder,
-            pausedUntil: summary.restingUntil
+            // A finished course rests "forever"; the server gets `courseEnded` instead of a date in the year 4001.
+            pausedUntil: settings.courseEnded(now: now) ? nil : summary.restingUntil,
+            asNeeded: settings.asNeeded,
+            courseEnded: settings.courseEnded(now: now),
+            pillsPerDose: settings.pillsPerDose,
+            takenToday: planner.takenToday(now: now)
         )
     }
 }
