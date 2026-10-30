@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/icon.png" width="120" alt="Medly icon">
+  <img src="docs/icon.png" width="120" alt="Pillot icon">
 </p>
 
-<h1 align="center">Medly</h1>
+<h1 align="center">Pillot</h1>
 
 <p align="center">
   Nhắc uống thuốc dễ thương, luôn đúng giờ Việt Nam dù bạn đang bay tới múi giờ nào.<br>
@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/finnwasabi/medly/actions/workflows/ci.yml"><img src="https://github.com/finnwasabi/medly/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/finnwasabi/medly/releases/latest"><img src="https://img.shields.io/github/v/release/finnwasabi/medly" alt="Release"></a>
+  <a href="https://github.com/finnwasabi/pillot/actions/workflows/ci.yml"><img src="https://github.com/finnwasabi/pillot/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/finnwasabi/pillot/releases/latest"><img src="https://img.shields.io/github/v/release/finnwasabi/pillot" alt="Release"></a>
   <img src="https://img.shields.io/badge/iOS-26%2B-FF8FC0" alt="iOS 26+">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/finnwasabi/medly" alt="MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/finnwasabi/pillot" alt="MIT"></a>
 </p>
 
 <p align="center">
@@ -26,7 +26,7 @@
 
 ## Tiếng Việt
 
-Mình làm Medly cho bạn gái, một tiếp viên hàng không: múi giờ đổi liên tục, nhưng giờ uống thuốc thì không được xê dịch.
+Mình làm Pillot cho bạn gái, một tiếp viên hàng không: múi giờ đổi liên tục, nhưng giờ uống thuốc thì không được xê dịch.
 App giữ lịch theo giờ Việt Nam, báo thức kêu cả khi máy im lặng, và không cần mạng. Mã nguồn mở, ai cần cứ cài và dùng.
 
 ### Có gì
@@ -46,18 +46,18 @@ App giữ lịch theo giờ Việt Nam, báo thức kêu cả khi máy im lặng
 ### Cài đặt
 
 Cần iOS 26 trở lên và [SideStore](https://sidestore.io) (Apple ID miễn phí là đủ).
-Trong SideStore: **Sources**, nút **+**, dán địa chỉ dưới đây rồi cài Medly. Có bản mới thì SideStore tự báo.
+Trong SideStore: **Sources**, nút **+**, dán địa chỉ dưới đây rồi cài Pillot. Có bản mới thì SideStore tự báo.
 
 ```
-https://github.com/finnwasabi/medly/releases/latest/download/source.json
+https://github.com/finnwasabi/pillot/releases/latest/download/source.json
 ```
 
-Đã thêm source cũ (`ners-daily`) thì vẫn chạy nhờ GitHub tự chuyển hướng, nhưng nên đổi sang địa chỉ trên.
+Đã thêm source cũ (`ners-daily` hay `medly`) thì vẫn chạy nhờ GitHub tự chuyển hướng, nhưng nên đổi sang địa chỉ trên.
 
 ### Phát triển
 
-- Xcode 26 trở lên và [XcodeGen](https://github.com/yonaskolb/XcodeGen): `xcodegen generate` rồi mở `Medly.xcodeproj`.
-- Logic lịch nhắc nằm ở `Packages/MedlyCore` (Swift thuần, có test): `swift test --package-path Packages/MedlyCore`.
+- Xcode 26 trở lên và [XcodeGen](https://github.com/yonaskolb/XcodeGen): `xcodegen generate` rồi mở `Pillot.xcodeproj`.
+- Logic lịch nhắc nằm ở `Packages/PillotCore` (Swift thuần, có test): `swift test --package-path Packages/PillotCore`.
 - Dịch vụ đồng bộ và bot: [server/](server/README.md). Đặc tả logic và hợp đồng dữ liệu: [docs/spec.md](docs/spec.md).
 - Muốn đóng góp: đọc [CONTRIBUTING.md](CONTRIBUTING.md). Lỗi bảo mật: [SECURITY.md](SECURITY.md).
 
@@ -65,7 +65,7 @@ App chỉ nhắc giờ, không đưa lời khuyên y khoa. Uống thế nào, u�
 
 ## English
 
-I built Medly for my girlfriend, a flight attendant: the time zone changes all the time, but her doses must not drift.
+I built Pillot for my girlfriend, a flight attendant: the time zone changes all the time, but her doses must not drift.
 It keeps the schedule on Vietnam time, rings even on silent, and works offline. It is open source, so anyone who needs it is welcome to use it.
 
 ### Features
@@ -85,18 +85,18 @@ It keeps the schedule on Vietnam time, rings even on silent, and works offline. 
 ### Install
 
 Requires iOS 26 or later and [SideStore](https://sidestore.io) (a free Apple ID is enough).
-In SideStore: **Sources**, **+**, paste the address below and install Medly. SideStore picks up new versions automatically.
+In SideStore: **Sources**, **+**, paste the address below and install Pillot. SideStore picks up new versions automatically.
 
 ```
-https://github.com/finnwasabi/medly/releases/latest/download/source.json
+https://github.com/finnwasabi/pillot/releases/latest/download/source.json
 ```
 
-The old `ners-daily` source still works through GitHub's redirect, but switching to this address is better.
+The old `ners-daily` and `medly` sources still work through GitHub's redirect, but switching to this address is better.
 
 ### Development
 
-- Xcode 26 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen): run `xcodegen generate`, then open `Medly.xcodeproj`.
-- The scheduling logic lives in `Packages/MedlyCore` (pure Swift, tested): `swift test --package-path Packages/MedlyCore`.
+- Xcode 26 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen): run `xcodegen generate`, then open `Pillot.xcodeproj`.
+- The scheduling logic lives in `Packages/PillotCore` (pure Swift, tested): `swift test --package-path Packages/PillotCore`.
 - Sync service and bot: [server/](server/README.md). Logic and data contract: [docs/spec.md](docs/spec.md).
 - Contributing: see [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
 
@@ -104,7 +104,7 @@ The app only keeps time. It gives no medical advice: for how to take, make up or
 
 ## Roadmap
 
-See the [open issues](https://github.com/finnwasabi/medly/issues) and the [changelog](CHANGELOG.md). Ideas and pull requests are welcome.
+See the [open issues](https://github.com/finnwasabi/pillot/issues) and the [changelog](CHANGELOG.md). Ideas and pull requests are welcome.
 
 ## License
 

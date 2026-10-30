@@ -1,7 +1,7 @@
-# Medly specification
+# Pillot specification
 
 The reference for the reminder logic and the data contract between the app and the sync service.
-`Packages/MedlyCore` implements everything below and its tests pin it down.
+`Packages/PillotCore` implements everything below and its tests pin it down.
 
 ## Fixed Vietnam time
 
@@ -62,7 +62,7 @@ The reference for the reminder logic and the data contract between the app and t
 - **Days off in a cycle** (`DoseCycle`: days on, days off, first day on): a dose time that falls on a day off moves to
   the first dose time of the next day on, which starts fresh like after a pause. Nothing rings and nothing counts as
   missed meanwhile, and days off show as paused in History. A dose still due on the last day on keeps its late window.
-- **Backup** is a JSON file (`format: "medly-backup"`, `version: 1`) with every medication and its history plus the
+- **Backup** is a JSON file (`format: "pillot-backup"`, `version: 1`; files saved as `"medly-backup"` still restore) with every medication and its history plus the
   app preferences. The connection code is left out. Restoring replaces everything on the phone after a confirmation.
   The app's own data file is accepted too.
 - **Widget and Shortcut:** the data file lives in an App Group so the widget can read it (SideStore renames the group

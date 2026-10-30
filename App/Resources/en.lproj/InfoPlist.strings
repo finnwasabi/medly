@@ -1,2 +1,2 @@
 /* English system permission prompts. The app's own texts live in code as L("vi", "en"). */
-"NSAlarmKitUsageDescription" = "Medly sets alarms to remind you to take your medication on time, even when your phone is on silent.";
+"NSAlarmKitUsageDescription" = "Pillot sets alarms to remind you to take your medication on time, even when your phone is on silent.";

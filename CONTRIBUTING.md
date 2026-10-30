@@ -16,10 +16,10 @@ Release tags (`v*`) can only be created by the maintainer.
 ## Workflow
 
 1. Fork the repo and branch off `develop` (`git switch -c fix-snooze-countdown origin/develop`).
-2. Make the change and add or adjust tests. Logic belongs in `Packages/MedlyCore`, which stays pure Foundation and never reads the device clock or time zone directly.
+2. Make the change and add or adjust tests. Logic belongs in `Packages/PillotCore`, which stays pure Foundation and never reads the device clock or time zone directly.
 3. Run the checks:
    ```sh
-   swift test --package-path Packages/MedlyCore
+   swift test --package-path Packages/PillotCore
    (cd server && node --test)
    xcodegen generate && scripts/build-ipa.sh
    ```

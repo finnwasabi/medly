@@ -1,4 +1,4 @@
-import MedlyCore
+import PillotCore
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -94,9 +94,9 @@ struct SettingsView: View {
                     pendingRestore = try Backup.read(Data(contentsOf: url))
                     backupIssue = nil
                 } catch Backup.Failure.tooNew {
-                    backupIssue = L("File này do bản Medly mới hơn tạo. Cập nhật app rồi thử lại.", "This file is from a newer Medly. Update the app and try again.")
+                    backupIssue = L("File này do bản Pillot mới hơn tạo. Cập nhật app rồi thử lại.", "This file is from a newer Pillot. Update the app and try again.")
                 } catch {
-                    backupIssue = L("Không đọc được file này. Chọn file sao lưu của Medly (.json).", "Could not read this file. Pick a Medly backup (.json).")
+                    backupIssue = L("Không đọc được file này. Chọn file sao lưu của Pillot (.json).", "Could not read this file. Pick a Pillot backup (.json).")
                 }
             }
             .alert(L("Khôi phục bản sao lưu?", "Restore this backup?"), isPresented: Binding(get: { pendingRestore != nil }, set: { if !$0 { pendingRestore = nil } }),

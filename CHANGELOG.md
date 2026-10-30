@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-30
+
+### Changed
+- The app is now called Pillot, and the repository is `finnwasabi/pillot`. Installed copies update in place and keep their data, and the old SideStore source addresses keep working through GitHub's redirect.
+- Backups are saved as `Pillot-backup-YYYY-MM-DD.json`. Backups saved by Medly still restore.
+- The Telegram bot is named Pillot.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added
@@ -126,12 +133,16 @@ All notable changes to this project are documented here. The format follows
 - Optional sync to a self-hosted service with a private Telegram bot.
 - Release builds and a SideStore source published from GitHub Actions.
 
-[Unreleased]: https://github.com/finnwasabi/ners-daily/compare/v0.1.7...HEAD
-[0.1.7]: https://github.com/finnwasabi/ners-daily/compare/v0.1.6...v0.1.7
-[0.1.6]: https://github.com/finnwasabi/ners-daily/compare/v0.1.3...v0.1.6
-[0.1.5]: https://github.com/finnwasabi/ners-daily/compare/v0.1.4...v0.1.5
-[0.1.4]: https://github.com/finnwasabi/ners-daily/compare/v0.1.3...v0.1.4
-[0.1.3]: https://github.com/finnwasabi/ners-daily/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/finnwasabi/ners-daily/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/finnwasabi/ners-daily/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/finnwasabi/ners-daily/releases/tag/v0.1.0
+[Unreleased]: https://github.com/finnwasabi/pillot/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/finnwasabi/pillot/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/finnwasabi/pillot/compare/v0.2.1...v0.3.0
+[0.2.1]: https://github.com/finnwasabi/pillot/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/finnwasabi/pillot/compare/v0.1.7...v0.2.0
+[0.1.7]: https://github.com/finnwasabi/pillot/compare/v0.1.6...v0.1.7
+[0.1.6]: https://github.com/finnwasabi/pillot/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/finnwasabi/pillot/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/finnwasabi/pillot/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/finnwasabi/pillot/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/finnwasabi/pillot/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/finnwasabi/pillot/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/finnwasabi/pillot/releases/tag/v0.1.0
