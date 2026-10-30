@@ -34,11 +34,11 @@ public struct MedicationReminders: Sendable {
     }
 
     public init(_ medication: Medication, now: Date, language: Language) {
-        let planner = medication.planner
+        let summary = medication.planner.summary(now: now)
         self.init(
-            id: medication.id, name: medication.name, events: planner.events(now: now),
+            id: medication.id, name: medication.name, events: summary.events(),
             refillMessage: medication.settings.pills?.refillMessage(medication.settings.refillReminder, language: language),
-            missedCount: planner.outstandingMissed(now: now).count)
+            missedCount: summary.outstandingMissed().count)
     }
 }
 

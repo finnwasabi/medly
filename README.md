@@ -40,7 +40,7 @@ App giữ lịch theo giờ Việt Nam, báo thức kêu cả khi máy im lặng
 - **Đếm viên theo vỉ**, thêm 1 vỉ một chạm, nhắc mua thêm khi sắp hết.
 - **Sao lưu và khôi phục** ra một file, cất vào iCloud Drive, Google Drive hay đâu tuỳ bạn.
 - **Widget** màn hình chính và màn khoá, **Shortcuts** "I took my meds".
-- **Không cần mạng.** Có mạng thì gửi trạng thái lên dịch vụ tự host để người thân theo dõi qua bot Telegram riêng, bot còn nhắc khi quá hạn chót mà chưa thấy uống.
+- **Không cần mạng.** Có mạng thì gửi trạng thái lên dịch vụ tự host để người thân theo dõi qua bot Telegram riêng, bot còn nhắc khi quá hạn chót mà chưa thấy uống. Mỗi server chỉ phục vụ một người dùng và một chat Telegram: muốn dùng tính năng này thì tự dựng server theo [server/](server/README.md).
 - **Tiếng Việt và tiếng Anh**, sáng và tối, giao diện neubrutalism pastel.
 
 ### Cài đặt
@@ -79,7 +79,7 @@ It keeps the schedule on Vietnam time, rings even on silent, and works offline. 
 - **Pill counting by pack**, one-tap Add a pack, and a refill reminder when it runs low.
 - **Backup and restore** to a file you keep wherever you like: iCloud Drive, Google Drive or anywhere else.
 - **Widgets** for the home and lock screen, and a **Shortcut**: "I took my meds".
-- **Offline first.** When online, the latest status goes to a self-hosted service so someone you trust can follow along through a private Telegram bot, which also nudges them when a deadline passes with no dose reported.
+- **Offline first.** When online, the latest status goes to a self-hosted service so someone you trust can follow along through a private Telegram bot, which also nudges them when a deadline passes with no dose reported. Each server serves one user and one Telegram chat, so using this means running your own (see [server/](server/README.md)).
 - **Vietnamese and English**, light and dark, in a pastel neubrutalist look.
 
 ### Install

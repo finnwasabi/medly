@@ -37,16 +37,17 @@ struct NextDoseEntry: TimelineEntry {
     static func make(_ medications: [Medication]?, at now: Date) -> NextDoseEntry {
         guard let medications else { return NextDoseEntry(date: now, items: [], readable: false) }
         let items = medications.map { medication -> Item in
-            let planner = medication.planner
-            let dose = planner.currentDose(now: now)
+            let summary = medication.planner.summary(now: now)
+            let dose = summary.dose
             let state: State
             var time = dose.dueAt
-            if let until = planner.restingUntil(now: now), now < dose.dueAt {
+            if let until = summary.restingUntil, now < dose.dueAt {
                 state = .resting
                 time = max(until, dose.dueAt)
             } else if now >= dose.dueAt {
                 state = now < dose.deadlineAt ? .due : .late
-            } else if let taken = planner.lastTaken(now: now)?.takenAt, now.timeIntervalSince(taken) < medication.settings.period / 2 {
+            } else if let taken = summary.lastTaken?.takenAt, medication.settings.showsAsTaken(taken, now: now) {
+                // The same rule as Today, so the widget never says "Next" for a dose the app shows as taken.
                 state = .taken
                 // When it was taken, not the next dose: "Taken 21:00" must not read as a time still to come.
                 time = taken
